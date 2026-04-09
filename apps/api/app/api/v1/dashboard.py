@@ -1,5 +1,9 @@
-from fastapi import APIRouter
+from typing import Annotated
 
+from fastapi import APIRouter, Depends
+
+from app.api.deps import get_current_user
+from app.schemas.auth import UserResponse
 from app.schemas.dashboard import (
     ActivityItem,
     DashboardResponse,
@@ -12,7 +16,9 @@ router = APIRouter()
 
 
 @router.get("", response_model=DashboardResponse)
-def get_dashboard() -> DashboardResponse:
+def get_dashboard(
+    _: Annotated[UserResponse, Depends(get_current_user)],
+) -> DashboardResponse:
     return DashboardResponse(
         summary=DashboardSummary(
             monitored_machines=27,
