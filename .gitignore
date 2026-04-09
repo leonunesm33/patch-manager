@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+coverage/
+.DS_Store
+.vscode/
+.idea/
+*.tsbuildinfo
+*:Zone.Identifier
+Patch-manager-estrutura-completa.docx
+Patch-manager-estrutura-completa.pdf
+patch-manager-inicial.html
+patch_manager_estrutura_completa.md
