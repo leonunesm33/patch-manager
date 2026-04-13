@@ -18,6 +18,7 @@ Base inicial de uma solucao de Patch Manager para Linux e Windows.
 ```bash
 cd apps/web
 npm install
+cp .env.example .env
 npm run dev
 ```
 
@@ -30,6 +31,10 @@ python -m venv .venv
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
+
+O frontend usa proxy para `/api` apontando para `http://localhost:8000` por padrao.
+Se a API estiver em outro host/porta, ajuste `apps/web/.env` com `VITE_API_PROXY_TARGET`
+ou defina `VITE_API_BASE_URL` para informar a URL completa da API.
 
 ### Infra
 

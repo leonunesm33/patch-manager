@@ -5,6 +5,7 @@ import {
   fetchMachines,
   updateMachine,
 } from "@/features/machines/api";
+import { ActionMenu } from "@/components/common/action-menu";
 import { ConfirmModal } from "@/components/common/confirm-modal";
 import type { Machine, MachineCreate } from "@/features/machines/types";
 import { StatusBadge } from "@/components/common/status-badge";
@@ -203,14 +204,20 @@ export function MachinesPage() {
                   </StatusBadge>
                 </td>
                 <td>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button className="btn" onClick={() => handleEditMachine(machine)}>
-                      Editar
-                    </button>
-                    <button className="btn" onClick={() => setPendingDelete(machine)}>
-                      Remover
-                    </button>
-                  </div>
+                  <ActionMenu
+                    label={`Abrir acoes da maquina ${machine.name}`}
+                    items={[
+                      {
+                        label: "Editar",
+                        onSelect: () => handleEditMachine(machine),
+                      },
+                      {
+                        label: "Remover",
+                        onSelect: () => setPendingDelete(machine),
+                        tone: "danger",
+                      },
+                    ]}
+                  />
                 </td>
               </tr>
             ))}

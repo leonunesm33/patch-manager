@@ -1,0 +1,19 @@
+[Unit]
+Description=Patch Manager Linux Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=patchmanager
+Group=patchmanager
+WorkingDirectory=/opt/patch-manager/agent-linux
+EnvironmentFile=/etc/patch-manager/agent-linux.env
+ExecStart=/usr/bin/python3 /opt/patch-manager/agent-linux/agent/main.py
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

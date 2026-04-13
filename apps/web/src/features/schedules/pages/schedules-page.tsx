@@ -5,6 +5,7 @@ import {
   fetchSchedules,
   updateSchedule,
 } from "@/features/schedules/api";
+import { ActionMenu } from "@/components/common/action-menu";
 import { ConfirmModal } from "@/components/common/confirm-modal";
 import type { ScheduleCreate, ScheduleItem } from "@/features/schedules/types";
 
@@ -156,13 +157,21 @@ export function SchedulesPage() {
                 <div className="muted" style={{ marginTop: 4 }}>
                   {schedule.scope}
                 </div>
-                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                  <button className="btn" onClick={() => handleEditSchedule(schedule)}>
-                    Editar
-                  </button>
-                  <button className="btn" onClick={() => setPendingDelete(schedule)}>
-                    Remover
-                  </button>
+                <div style={{ marginTop: 10 }}>
+                  <ActionMenu
+                    label={`Abrir acoes do agendamento ${schedule.name}`}
+                    items={[
+                      {
+                        label: "Editar",
+                        onSelect: () => handleEditSchedule(schedule),
+                      },
+                      {
+                        label: "Remover",
+                        onSelect: () => setPendingDelete(schedule),
+                        tone: "danger",
+                      },
+                    ]}
+                  />
                 </div>
               </div>
               <div style={{ textAlign: "right" }}>

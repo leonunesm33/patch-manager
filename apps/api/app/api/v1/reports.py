@@ -1,8 +1,10 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_db
+from app.repositories.execution_log_repository import ExecutionLogRepository
 from app.schemas.auth import UserResponse
 from app.schemas.report import ReportItem
 
@@ -11,34 +13,21 @@ router = APIRouter()
 
 @router.get("", response_model=list[ReportItem])
 def list_reports(
+    db: Annotated[Session, Depends(get_db)],
     _: Annotated[UserResponse, Depends(get_current_user)],
 ) -> list[ReportItem]:
+    repository = ExecutionLogRepository(db)
+    logs = repository.list_recent()
     return [
         ReportItem(
-            date="09/04 14:10",
-            machine="SRV-WEB-01",
-            patch="KB5034441",
-            platform="Windows",
-            severity="critical",
-            result="applied",
-            duration="4m 12s",
-        ),
-        ReportItem(
-            date="09/04 13:55",
-            machine="ubuntu-prod-03",
-            patch="linux-image-6.5.0-44",
-            platform="Ubuntu",
-            severity="critical",
-            result="applied",
-            duration="8m 30s",
-        ),
-        ReportItem(
-            date="09/04 13:40",
-            machine="SRV-DB-02",
-            patch="KB5034122",
-            platform="Windows",
-            severity="critical",
-            result="failed",
-            duration="2m 01s",
-        ),
+            date=log.executed_at.strftime("%d/%m %H:%M"),
+            schedule=log.schedule_name,
+            machine=log.machine_name,
+            patch=log.patch_id,
+            platform=log.platform,
+            severity=log.severity,
+            result=log.result,
+            duration=f"{log.duration_seconds // 60}m {log.duration_seconds % 60:02d}s",
+        )
+        for log in logs
     ]

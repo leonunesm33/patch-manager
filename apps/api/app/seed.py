@@ -73,6 +73,7 @@ def seed_initial_data() -> None:
                         severity="critical",
                         machines=8,
                         release_date=date(2026, 4, 8),
+                        approval_status="pending",
                     ),
                     PatchModel(
                         id="openssl-3.0.2-0ubuntu1.14",
@@ -80,6 +81,7 @@ def seed_initial_data() -> None:
                         severity="important",
                         machines=5,
                         release_date=date(2026, 4, 9),
+                        approval_status="pending",
                     ),
                 ]
             )

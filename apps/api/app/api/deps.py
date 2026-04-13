@@ -1,11 +1,12 @@
 from collections.abc import Generator
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db_session
+from app.core.config import settings
 from app.core.security import decode_token
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import UserResponse
@@ -41,3 +42,12 @@ def get_current_user(
         raise credentials_exception
 
     return UserResponse.model_validate(user)
+
+
+def get_agent_key(x_agent_key: str = Header(default="")) -> str:
+    if x_agent_key != settings.agent_shared_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid agent key",
+        )
+    return x_agent_key

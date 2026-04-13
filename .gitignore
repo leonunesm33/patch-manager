@@ -9,6 +9,8 @@ coverage/
 .DS_Store
 .vscode/
 .idea/
+.codex
+.codex/
 *.tsbuildinfo
 *:Zone.Identifier
 Patch-manager-estrutura-completa.docx
