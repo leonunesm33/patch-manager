@@ -6,6 +6,9 @@ class DashboardSummary(BaseModel):
     pending_patches: int
     compliance_rate: float
     failed_jobs: int
+    reboot_pending_hosts: int
+    pending_agent_commands: int
+    windows_pending_updates: int
 
 
 class ActivityItem(BaseModel):
@@ -26,8 +29,25 @@ class PlatformDistribution(BaseModel):
     linux_servers: int
 
 
+class RebootPendingItem(BaseModel):
+    agent_id: str
+    hostname: str
+    platform: str
+    primary_ip: str | None = None
+    last_seen_at: str
+
+
+class PendingActionItem(BaseModel):
+    title: str
+    detail: str
+    action_type: str
+    severity: str
+
+
 class DashboardResponse(BaseModel):
     summary: DashboardSummary
     activity: list[ActivityItem]
     patch_volume: list[PatchVolumeItem]
     platform_distribution: PlatformDistribution
+    reboot_pending: list[RebootPendingItem]
+    pending_actions: list[PendingActionItem]

@@ -10,6 +10,7 @@ import {
 import { ActionMenu } from "@/components/common/action-menu";
 import { ConfirmModal } from "@/components/common/confirm-modal";
 import { StatusBadge } from "@/components/common/status-badge";
+import { formatDateTimeSaoPaulo } from "@/lib/datetime";
 import type { PatchApproval, PatchCreate } from "@/features/patches/types";
 
 function getStatusVariant(status: PatchApproval["approval_status"]) {
@@ -217,7 +218,7 @@ export function PatchApprovalsPage() {
                 <td className="code">{patch.release_date}</td>
                 <td className="muted">
                   {patch.reviewed_by
-                    ? `${patch.reviewed_by} - ${patch.reviewed_at ? new Date(patch.reviewed_at).toLocaleString("pt-BR") : "sem horario"}`
+                    ? `${patch.reviewed_by} - ${patch.reviewed_at ? formatDateTimeSaoPaulo(patch.reviewed_at) : "sem horario"}`
                     : "Aguardando decisao"}
                 </td>
                 <td>

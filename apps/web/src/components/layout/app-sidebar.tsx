@@ -15,6 +15,7 @@ const navigation = [
   {
     label: "Analise",
     items: [
+      { to: "/operations", name: "Operacoes" },
       { to: "/reports", name: "Relatorios" },
       { to: "/settings", name: "Configuracoes" },
     ],

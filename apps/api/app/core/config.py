@@ -20,7 +20,10 @@ class Settings(BaseSettings):
     scheduler_interval_seconds: int = 300
     worker_autostart: bool = True
     worker_interval_seconds: int = 30
-    agent_shared_key: str = "patch-manager-agent-key"
+    agent_bootstrap_token: str = "patch-manager-bootstrap-token"
+    seed_linux_agent_id: str = "linux-agent-01"
+    seed_linux_agent_key: str = "patch-manager-agent-key"
+    seed_linux_agent_description: str = "Linux agent default credential"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

@@ -9,11 +9,15 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models.machine import MachineModel
+from app.repositories.agent_credential_repository import AgentCredentialRepository
 from app.repositories.machine_repository import MachineRepository
 from app.schemas.auth import UserResponse
 from app.schemas.machine import Machine, MachineCreate
+from app.services.agent_registry_service import agent_registry_service
+from app.services.settings_service import SettingsService
 
 router = APIRouter()
+AGENT_CONNECTIVITY_MAX_AGE_SECONDS = 120
 
 MOCK_MACHINES = [
     Machine(
@@ -61,7 +65,20 @@ def list_machines(
         repository = MachineRepository(db)
         machines = repository.list_all()
         if machines:
-            return [Machine.model_validate(machine) for machine in machines]
+            items: list[Machine] = []
+            for machine in machines:
+                machine_status = machine.status
+                if machine.id.startswith("agent-"):
+                    agent_id = machine.id.removeprefix("agent-")
+                    if not agent_registry_service.is_connected(
+                        agent_id,
+                        max_age_seconds=AGENT_CONNECTIVITY_MAX_AGE_SECONDS,
+                    ):
+                        machine_status = "offline"
+                items.append(
+                    Machine.model_validate(machine).model_copy(update={"status": machine_status})
+                )
+            return items
     except SQLAlchemyError:
         pass
 
@@ -141,12 +158,27 @@ def update_machine(
 def delete_machine(
     machine_id: str,
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(get_current_user)],
+    current_user: Annotated[UserResponse, Depends(get_current_user)],
 ) -> Response:
     repository = MachineRepository(db)
     machine = repository.get_by_id(machine_id)
     if machine is None:
         raise HTTPException(status_code=404, detail="Machine not found")
+
+    if machine.id.startswith("agent-"):
+        agent_id = machine.id.removeprefix("agent-")
+        credential_repository = AgentCredentialRepository(db)
+        settings_service = SettingsService(db)
+        credential = credential_repository.get_by_agent_id(agent_id)
+        if credential is not None:
+            credential.is_active = False
+            credential_repository.update(credential)
+            settings_service.record_operational_event(
+                "agent_revoked_by_machine_delete",
+                current_user.username,
+                f"Revogou o agente {agent_id} ao remover a maquina {machine.name}.",
+            )
+        agent_registry_service.disconnect(agent_id)
 
     repository.delete(machine)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

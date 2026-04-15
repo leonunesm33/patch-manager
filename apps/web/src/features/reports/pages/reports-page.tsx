@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import {
   fetchPatchJobs,
   fetchReports,
@@ -6,6 +6,7 @@ import {
   runPatchCycle,
 } from "@/features/reports/api";
 import { StatusBadge } from "@/components/common/status-badge";
+import { formatDateTimeSaoPaulo, formatTimeSaoPaulo } from "@/lib/datetime";
 import type {
   PatchCycleRunResponse,
   PatchJobProcessResponse,
@@ -19,6 +20,25 @@ function getJobVariant(status: PatchJobItem["status"]) {
   return "warn";
 }
 
+function getFailureReasonLabel(reason: PatchJobItem["failure_reason"]) {
+  switch (reason) {
+    case "guardrail_real_apply_disabled":
+      return "apply real desabilitado";
+    case "guardrail_invalid_package_name":
+      return "pacote bloqueado por validacao";
+    case "guardrail_package_not_allowed":
+      return "fora da allowlist";
+    case "guardrail_not_upgradable":
+      return "pacote nao atualizavel";
+    case "guardrail_security_only_blocked":
+      return "bloqueado por security-only";
+    case "execution_error":
+      return "falha de execucao";
+    default:
+      return null;
+  }
+}
+
 export function ReportsPage() {
   const [jobs, setJobs] = useState<PatchJobItem[]>([]);
   const [rows, setRows] = useState<ReportItem[]>([]);
@@ -28,6 +48,7 @@ export function ReportsPage() {
   const [processingJobs, setProcessingJobs] = useState(false);
   const [cycleResult, setCycleResult] = useState<PatchCycleRunResponse | null>(null);
   const [processResult, setProcessResult] = useState<PatchJobProcessResponse | null>(null);
+  const guardrailBlockedJobs = jobs.filter((job) => job.failure_reason?.startsWith("guardrail_"));
 
   useEffect(() => {
     let active = true;
@@ -173,6 +194,26 @@ export function ReportsPage() {
           </StatusBadge>
         </div>
       ) : null}
+      {guardrailBlockedJobs.length > 0 ? (
+        <div className="list-item" style={{ marginBottom: 16, borderColor: "var(--warning-border, var(--border))" }}>
+          <div>
+            <div style={{ fontWeight: 700 }}>Bloqueios por guardrail</div>
+            <div className="muted" style={{ marginTop: 4 }}>
+              {guardrailBlockedJobs.length} jobs recentes foram bloqueados por regras de seguranca do agente Linux.
+            </div>
+            <div className="muted" style={{ marginTop: 4 }}>
+              Mais recentes:{" "}
+              {guardrailBlockedJobs
+                .slice(0, 3)
+                .map((job) => `${job.machine_name} / ${job.patch_id}`)
+                .join(", ")}
+            </div>
+          </div>
+          <StatusBadge variant="warn">
+            {`${guardrailBlockedJobs.length} bloqueados`}
+          </StatusBadge>
+        </div>
+      ) : null}
       <div className="section-header" style={{ marginTop: 8 }}>
         <h3 className="section-title">Fila de jobs</h3>
         <span className="muted">{loading ? "Carregando..." : `${jobs.length} jobs recentes`}</span>
@@ -199,19 +240,32 @@ export function ReportsPage() {
           ) : null}
           {jobs.map((job) => (
             <tr key={job.id}>
-              <td className="code">{new Date(job.created_at).toLocaleString("pt-BR")}</td>
+                    <td className="code">{formatDateTimeSaoPaulo(job.created_at)}</td>
               <td>{job.schedule_name}</td>
               <td>{job.machine_name}</td>
               <td className="code">{job.patch_id}</td>
               <td className="muted">
                 {job.claimed_by_agent
-                  ? `${job.claimed_by_agent}${job.claimed_at ? ` · ${new Date(job.claimed_at).toLocaleTimeString("pt-BR")}` : ""}`
+                  ? `${job.claimed_by_agent}${
+                          job.claimed_at ? ` - ${formatTimeSaoPaulo(job.claimed_at)}` : ""
+                    }`
                   : "Worker interno"}
               </td>
               <td>
                 <StatusBadge variant={getJobVariant(job.status)}>{job.status}</StatusBadge>
               </td>
-              <td className="muted">{job.error_message ?? "-"}</td>
+              <td className="muted">
+                {job.failure_reason ? (
+                  <div style={{ display: "grid", gap: 6 }}>
+                    <StatusBadge variant="warn">
+                      {getFailureReasonLabel(job.failure_reason) ?? "guardrail"}
+                    </StatusBadge>
+                    <span>{job.error_message ?? "-"}</span>
+                  </div>
+                ) : (
+                  job.error_message ?? "-"
+                )}
+              </td>
             </tr>
           ))}
         </tbody>

@@ -7,6 +7,7 @@ import { MachinesPage } from "@/features/machines/pages/machines-page";
 import { PatchApprovalsPage } from "@/features/patches/pages/patch-approvals-page";
 import { ReportsPage } from "@/features/reports/pages/reports-page";
 import { SchedulesPage } from "@/features/schedules/pages/schedules-page";
+import { OperationsPage } from "@/features/settings/pages/operations-page";
 import { SettingsPage } from "@/features/settings/pages/settings-page";
 
 export const router = createBrowserRouter([
@@ -25,6 +26,7 @@ export const router = createBrowserRouter([
           { path: "machines", element: <MachinesPage /> },
           { path: "patches", element: <PatchApprovalsPage /> },
           { path: "schedules", element: <SchedulesPage /> },
+          { path: "operations", element: <OperationsPage /> },
           { path: "reports", element: <ReportsPage /> },
           { path: "settings", element: <SettingsPage /> },
         ],

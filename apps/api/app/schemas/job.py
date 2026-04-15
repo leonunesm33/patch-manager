@@ -15,6 +15,7 @@ class PatchJobItem(BaseModel):
     status: str
     claimed_by_agent: str | None = None
     claimed_at: datetime | None = None
+    failure_reason: str | None = None
     error_message: str | None = None
     created_at: datetime
     started_at: datetime | None = None

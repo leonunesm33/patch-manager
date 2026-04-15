@@ -5,6 +5,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.security import hash_password
+from app.models.agent_credential import AgentCredentialModel
 from app.models.machine import MachineModel
 from app.models.patch import PatchModel
 from app.models.schedule import ScheduleModel
@@ -21,6 +22,17 @@ def seed_initial_data() -> None:
                     username=settings.seed_admin_username,
                     full_name=settings.seed_admin_full_name,
                     password_hash=hash_password(settings.seed_admin_password),
+                    is_active=True,
+                )
+            )
+
+        if session.scalar(select(AgentCredentialModel.agent_id).limit(1)) is None:
+            session.add(
+                AgentCredentialModel(
+                    agent_id=settings.seed_linux_agent_id,
+                    platform="linux",
+                    description=settings.seed_linux_agent_description,
+                    key_hash=hash_password(settings.seed_linux_agent_key),
                     is_active=True,
                 )
             )

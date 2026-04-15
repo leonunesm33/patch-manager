@@ -9,6 +9,7 @@ import { ActionMenu } from "@/components/common/action-menu";
 import { ConfirmModal } from "@/components/common/confirm-modal";
 import type { Machine, MachineCreate } from "@/features/machines/types";
 import { StatusBadge } from "@/components/common/status-badge";
+import { formatDateTimeSaoPaulo } from "@/lib/datetime";
 
 function getVariant(status: string) {
   if (status === "online") return "ok";
@@ -197,7 +198,7 @@ export function MachinesPage() {
                 <td>{machine.platform}</td>
                 <td>{machine.group}</td>
                 <td>{machine.pending_patches}</td>
-                <td className="code">{machine.last_check_in}</td>
+                <td className="code">{formatDateTimeSaoPaulo(machine.last_check_in)}</td>
                 <td>
                   <StatusBadge variant={getVariant(machine.status)}>
                     {machine.status}

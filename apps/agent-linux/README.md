@@ -25,10 +25,17 @@ PATCH_MANAGER_AGENT_KEY=patch-manager-agent-key python3 agent/main.py
 ### Variaveis principais
 
 - `PATCH_MANAGER_API`: endpoint base da API de agentes
-- `PATCH_MANAGER_AGENT_KEY`: chave compartilhada do agente
+- `PATCH_MANAGER_AGENT_KEY`: credencial secreta do agente
 - `PATCH_MANAGER_AGENT_ID`: identificador unico do host
 - `PATCH_MANAGER_EXECUTION_MODE`: fallback inicial do agente
 - `PATCH_MANAGER_LOG_FILE`: arquivo local de log
+- `PATCH_MANAGER_ENV_FILE`: caminho opcional para um arquivo `.env`
+
+O agente tenta carregar automaticamente um `.env` em:
+
+- diretório atual
+- `apps/agent-linux/.env`
+- caminho informado por `PATCH_MANAGER_ENV_FILE`
 
 ### Rodando como servico
 

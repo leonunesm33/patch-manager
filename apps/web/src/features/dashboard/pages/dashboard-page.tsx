@@ -60,6 +60,24 @@ export function DashboardPage() {
           detail: "execucoes com necessidade de revisao",
           tone: "#ff4d6a",
         },
+        {
+          label: "Reboot pendente",
+          value: String(data.summary.reboot_pending_hosts),
+          detail: "hosts aguardando acao pos-patch",
+          tone: "#ff8a3d",
+        },
+        {
+          label: "Cmds operacionais",
+          value: String(data.summary.pending_agent_commands),
+          detail: "comandos administrativos aguardando retorno",
+          tone: "#8f7cff",
+        },
+        {
+          label: "Updates Windows",
+          value: String(data.summary.windows_pending_updates),
+          detail: "updates reportados pelo pool Windows",
+          tone: "#3dd9b8",
+        },
       ]
     : [];
 
@@ -72,9 +90,8 @@ export function DashboardPage() {
       <section className="hero">
         <h1 className="hero-title">Centro de operacao de atualizacoes</h1>
         <p className="hero-copy">
-          Esta base inicial traduz o prototipo HTML em uma aplicacao React pronta para
-          receber integracao com API, autenticacao e os agentes de patch para Windows
-          e Linux.
+          O painel agora consolida autenticacao, persistencia, ciclo de vida dos agentes
+          e execucao operacional para Linux e Windows em um unico fluxo de homologacao.
         </p>
         <div className="status-strip">
           <span>
@@ -143,6 +160,41 @@ export function DashboardPage() {
             </div>
           </div>
         </section>
+      </section>
+
+      <section className="panel section">
+        <div className="section-header">
+          <h2 className="section-title">Acoes pendentes</h2>
+          <span className="muted">{data?.pending_actions.length ?? 0} itens prioritarios</span>
+        </div>
+        <div className="list">
+          {(data?.pending_actions ?? []).length === 0 ? (
+            <div className="list-item">
+              <div className="muted">Nenhuma acao pendente critica no momento.</div>
+            </div>
+          ) : null}
+          {(data?.pending_actions ?? []).map((item) => (
+            <div key={`${item.action_type}-${item.title}`} className="list-item">
+              <div>
+                <div style={{ fontWeight: 700 }}>{item.title}</div>
+                <div className="muted" style={{ marginTop: 4 }}>
+                  {item.detail}
+                </div>
+              </div>
+              <StatusBadge
+                variant={
+                  item.severity === "error"
+                    ? "error"
+                    : item.severity === "warn"
+                      ? "warn"
+                      : "ok"
+                }
+              >
+                {item.severity}
+              </StatusBadge>
+            </div>
+          ))}
+        </div>
       </section>
 
       <section className="panel section">

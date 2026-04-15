@@ -36,6 +36,7 @@ export type PatchJobItem = {
   status: "pending" | "running" | "completed" | "failed";
   claimed_by_agent: string | null;
   claimed_at: string | null;
+  failure_reason: string | null;
   error_message: string | null;
   created_at: string;
   started_at: string | null;

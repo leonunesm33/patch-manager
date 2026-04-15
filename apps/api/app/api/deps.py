@@ -7,7 +7,10 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db_session
 from app.core.config import settings
-from app.core.security import decode_token
+from app.core.security import decode_token, verify_password
+from app.models.agent_credential import AgentCredentialModel
+from app.repositories.agent_credential_repository import AgentCredentialRepository
+from app.services.settings_service import SettingsService
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import UserResponse
 
@@ -44,10 +47,33 @@ def get_current_user(
     return UserResponse.model_validate(user)
 
 
-def get_agent_key(x_agent_key: str = Header(default="")) -> str:
-    if x_agent_key != settings.agent_shared_key:
+def get_agent_identity(
+    x_agent_id: str = Header(default=""),
+    x_agent_key: str = Header(default=""),
+    db: Session = Depends(get_db),
+) -> AgentCredentialModel:
+    repository = AgentCredentialRepository(db)
+    credential = repository.get_by_agent_id(x_agent_id)
+    if (
+        credential is None
+        or not credential.is_active
+        or not verify_password(x_agent_key, credential.key_hash)
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid agent key",
+            detail="Invalid agent credentials",
         )
-    return x_agent_key
+    return credential
+
+
+def get_bootstrap_token(
+    x_bootstrap_token: str = Header(default=""),
+    db: Session = Depends(get_db),
+) -> str:
+    expected_token = SettingsService(db).get_agent_bootstrap_token()
+    if x_bootstrap_token != expected_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid bootstrap token",
+        )
+    return x_bootstrap_token
