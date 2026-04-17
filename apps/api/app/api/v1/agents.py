@@ -633,9 +633,8 @@ def list_patch_jobs(
 ) -> list[PatchJobItem]:
     repository = PatchJobRepository(db)
     return [
-        PatchJobItem.model_validate(
-            job,
-            update={"failure_reason": _classify_job_failure(job.error_message)},
+        PatchJobItem.model_validate(job).model_copy(
+            update={"failure_reason": _classify_job_failure(job.error_message)}
         )
         for job in repository.list_recent()
     ]
