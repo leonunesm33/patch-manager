@@ -51,6 +51,12 @@ def get_dashboard(
     reboot_pending_agents = [
         agent for agent in agent_registry_service.list_connected() if agent.reboot_required
     ]
+    reboot_scheduled_agents = [
+        agent for agent in reboot_pending_agents if agent.post_patch_state == "reboot-scheduled"
+    ]
+    reboot_required_agents = [
+        agent for agent in reboot_pending_agents if agent.post_patch_state != "reboot-scheduled"
+    ]
     pending_enrollments = enrollment_repository.list_pending()
     recent_commands = command_repository.list_recent(limit=50)
     inventory_snapshots = inventory_repository.list_all()
@@ -97,7 +103,8 @@ def get_dashboard(
             pending_patches=pending_patches,
             compliance_rate=compliance_rate,
             failed_jobs=failed_jobs,
-            reboot_pending_hosts=len(reboot_pending_agents),
+            reboot_pending_hosts=len(reboot_required_agents),
+            reboot_scheduled_hosts=len(reboot_scheduled_agents),
             pending_agent_commands=pending_commands,
             windows_pending_updates=windows_pending_updates,
         ),
@@ -172,6 +179,9 @@ def get_dashboard(
                 hostname=agent.hostname,
                 platform=agent.platform,
                 primary_ip=agent.primary_ip,
+                post_patch_state=agent.post_patch_state,
+                post_patch_message=agent.post_patch_message,
+                reboot_scheduled_at=agent.reboot_scheduled_at.isoformat() if agent.reboot_scheduled_at else None,
                 last_seen_at=agent.last_seen_at.isoformat(),
             )
             for agent in reboot_pending_agents[:5]
@@ -179,13 +189,25 @@ def get_dashboard(
         pending_actions=(
             [
                 PendingActionItem(
-                    title=f"{len(reboot_pending_agents)} hosts aguardando reboot",
-                    detail="Hosts Linux exigem acao pos-patch conforme politica de reboot.",
+                    title=f"{len(reboot_required_agents)} hosts aguardando reboot",
+                    detail="Hosts com apply concluido ainda exigem acao ou confirmacao de reboot.",
                     action_type="reboot",
                     severity="warn",
                 )
             ]
-            if reboot_pending_agents
+            if reboot_required_agents
+            else []
+        )
+        + (
+            [
+                PendingActionItem(
+                    title=f"{len(reboot_scheduled_agents)} hosts com reboot agendado",
+                    detail="Existe reboot programado aguardando conclusao e nova telemetria do agente.",
+                    action_type="reboot_scheduled",
+                    severity="info",
+                )
+            ]
+            if reboot_scheduled_agents
             else []
         )
         + (

@@ -39,6 +39,11 @@ class AgentRegistryService:
                 "installed_update_count": current.get("installed_update_count"),
                 "pending_update_summary": str(current.get("pending_update_summary", "")),
                 "windows_update_source": str(current.get("windows_update_source", "")),
+                "post_patch_state": current.get("post_patch_state"),
+                "post_patch_message": current.get("post_patch_message"),
+                "last_apply_result": current.get("last_apply_result"),
+                "last_apply_at": current.get("last_apply_at"),
+                "reboot_scheduled_at": current.get("reboot_scheduled_at"),
                 "last_seen_at": datetime.utcnow(),
             }
 
@@ -71,6 +76,11 @@ class AgentRegistryService:
                 "installed_update_count": self._agents.get(agent_id, {}).get("installed_update_count"),
                 "pending_update_summary": str(self._agents.get(agent_id, {}).get("pending_update_summary", "")),
                 "windows_update_source": str(self._agents.get(agent_id, {}).get("windows_update_source", "")),
+                "post_patch_state": self._agents.get(agent_id, {}).get("post_patch_state"),
+                "post_patch_message": self._agents.get(agent_id, {}).get("post_patch_message"),
+                "last_apply_result": self._agents.get(agent_id, {}).get("last_apply_result"),
+                "last_apply_at": self._agents.get(agent_id, {}).get("last_apply_at"),
+                "reboot_scheduled_at": self._agents.get(agent_id, {}).get("reboot_scheduled_at"),
                 "last_seen_at": datetime.utcnow(),
             }
 
@@ -111,6 +121,11 @@ class AgentRegistryService:
                 "installed_update_count": installed_update_count,
                 "pending_update_summary": pending_update_summary or "",
                 "windows_update_source": windows_update_source or "",
+                "post_patch_state": self._agents.get(agent_id, {}).get("post_patch_state"),
+                "post_patch_message": self._agents.get(agent_id, {}).get("post_patch_message"),
+                "last_apply_result": self._agents.get(agent_id, {}).get("last_apply_result"),
+                "last_apply_at": self._agents.get(agent_id, {}).get("last_apply_at"),
+                "reboot_scheduled_at": self._agents.get(agent_id, {}).get("reboot_scheduled_at"),
                 "last_seen_at": datetime.utcnow(),
             }
 
@@ -174,6 +189,11 @@ class AgentRegistryService:
                     ),
                     pending_update_summary=str(agent.get("pending_update_summary", "")) or None,
                     windows_update_source=str(agent.get("windows_update_source", "")) or None,
+                    post_patch_state=str(agent.get("post_patch_state", "")) or None,
+                    post_patch_message=str(agent.get("post_patch_message", "")) or None,
+                    last_apply_result=str(agent.get("last_apply_result", "")) or None,
+                    last_apply_at=agent.get("last_apply_at"),
+                    reboot_scheduled_at=agent.get("reboot_scheduled_at"),
                     last_seen_at=agent["last_seen_at"],
                 )
                 for agent in self._agents.values()
@@ -223,6 +243,11 @@ class AgentRegistryService:
                 ),
                 pending_update_summary=str(agent.get("pending_update_summary", "")) or None,
                 windows_update_source=str(agent.get("windows_update_source", "")) or None,
+                post_patch_state=str(agent.get("post_patch_state", "")) or None,
+                post_patch_message=str(agent.get("post_patch_message", "")) or None,
+                last_apply_result=str(agent.get("last_apply_result", "")) or None,
+                last_apply_at=agent.get("last_apply_at"),
+                reboot_scheduled_at=agent.get("reboot_scheduled_at"),
                 last_seen_at=agent["last_seen_at"],
             )
 
@@ -260,6 +285,26 @@ class AgentRegistryService:
             if not queue:
                 self._commands.pop(agent_id, None)
         return AgentCommandResponse.model_validate(command)
+
+    def update_post_patch_state(
+        self,
+        agent_id: str,
+        *,
+        post_patch_state: str,
+        post_patch_message: str | None,
+        last_apply_result: str | None,
+        last_apply_at: datetime | None,
+        reboot_scheduled_at: datetime | None,
+    ) -> None:
+        with self._lock:
+            current = self._agents.get(agent_id)
+            if current is None:
+                return
+            current["post_patch_state"] = post_patch_state
+            current["post_patch_message"] = post_patch_message
+            current["last_apply_result"] = last_apply_result
+            current["last_apply_at"] = last_apply_at
+            current["reboot_scheduled_at"] = reboot_scheduled_at
 
 
 agent_registry_service = AgentRegistryService()

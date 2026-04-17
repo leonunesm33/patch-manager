@@ -20,6 +20,18 @@ class AgentCheckInRequest(BaseModel):
     execution_mode: str
 
 
+class AgentInventoryEntryPayload(BaseModel):
+    identifier: str
+    title: str
+    current_version: str | None = None
+    target_version: str | None = None
+    source: str | None = None
+    summary: str | None = None
+    kb_id: str | None = None
+    security_only: bool = False
+    installed_at: datetime | None = None
+
+
 class AgentInventoryRequest(BaseModel):
     agent_id: str
     platform: str
@@ -37,6 +49,8 @@ class AgentInventoryRequest(BaseModel):
     kernel_version: str
     agent_version: str
     execution_mode: str
+    pending_updates: list[AgentInventoryEntryPayload] = []
+    installed_updates: list[AgentInventoryEntryPayload] = []
 
 
 class AgentJobClaimRequest(BaseModel):
@@ -129,7 +143,38 @@ class AgentInventorySnapshotItem(BaseModel):
     kernel_version: str
     agent_version: str
     execution_mode: str
+    post_patch_state: str = "idle"
+    post_patch_message: str | None = None
+    last_apply_result: str | None = None
+    last_apply_at: datetime | None = None
+    reboot_scheduled_at: datetime | None = None
     updated_at: datetime
+
+
+class AgentInventoryDetailItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    identifier: str
+    title: str
+    current_version: str | None = None
+    target_version: str | None = None
+    source: str | None = None
+    summary: str | None = None
+    kb_id: str | None = None
+    security_only: bool = False
+    installed_at: datetime | None = None
+
+
+class AgentInventoryDetailResponse(BaseModel):
+    agent_id: str
+    platform: str
+    hostname: str
+    package_manager: str
+    pending_count: int
+    installed_count: int
+    updated_at: datetime | None = None
+    pending_updates: list[AgentInventoryDetailItem]
+    installed_updates: list[AgentInventoryDetailItem]
 
 
 class ConnectedAgentResponse(BaseModel):
@@ -149,6 +194,11 @@ class ConnectedAgentResponse(BaseModel):
     installed_update_count: int | None = None
     pending_update_summary: str | None = None
     windows_update_source: str | None = None
+    post_patch_state: str | None = None
+    post_patch_message: str | None = None
+    last_apply_result: str | None = None
+    last_apply_at: datetime | None = None
+    reboot_scheduled_at: datetime | None = None
     last_seen_at: datetime
 
 
@@ -232,5 +282,10 @@ class StoppedAgentResponse(BaseModel):
     installed_update_count: int | None = None
     pending_update_summary: str | None = None
     windows_update_source: str | None = None
+    post_patch_state: str | None = None
+    post_patch_message: str | None = None
+    last_apply_result: str | None = None
+    last_apply_at: datetime | None = None
+    reboot_scheduled_at: datetime | None = None
     status: str = "stopped"
     last_seen_at: datetime | None = None

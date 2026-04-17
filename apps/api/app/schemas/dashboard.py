@@ -7,6 +7,7 @@ class DashboardSummary(BaseModel):
     compliance_rate: float
     failed_jobs: int
     reboot_pending_hosts: int
+    reboot_scheduled_hosts: int
     pending_agent_commands: int
     windows_pending_updates: int
 
@@ -34,6 +35,9 @@ class RebootPendingItem(BaseModel):
     hostname: str
     platform: str
     primary_ip: str | None = None
+    post_patch_state: str | None = None
+    post_patch_message: str | None = None
+    reboot_scheduled_at: str | None = None
     last_seen_at: str
 
 

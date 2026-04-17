@@ -3,6 +3,7 @@ import { StatCard } from "@/components/common/stat-card";
 import { StatusBadge } from "@/components/common/status-badge";
 import { fetchDashboard } from "@/features/dashboard/api";
 import type { DashboardResponse } from "@/features/dashboard/types";
+import { formatDateTimeSaoPaulo } from "@/lib/datetime";
 
 export function DashboardPage() {
   const [data, setData] = useState<DashboardResponse | null>(null);
@@ -65,6 +66,12 @@ export function DashboardPage() {
           value: String(data.summary.reboot_pending_hosts),
           detail: "hosts aguardando acao pos-patch",
           tone: "#ff8a3d",
+        },
+        {
+          label: "Reboot agendado",
+          value: String(data.summary.reboot_scheduled_hosts),
+          detail: "hosts com reboot ja programado",
+          tone: "#ffb347",
         },
         {
           label: "Cmds operacionais",
@@ -192,6 +199,48 @@ export function DashboardPage() {
               >
                 {item.severity}
               </StatusBadge>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel section">
+        <div className="section-header">
+          <h2 className="section-title">Hosts em estado pos-patch</h2>
+          <span className="muted">{data?.reboot_pending.length ?? 0} hosts com reboot sinalizado</span>
+        </div>
+        <div className="list">
+          {(data?.reboot_pending ?? []).length === 0 ? (
+            <div className="list-item">
+              <div className="muted">Nenhum host com reboot pendente ou agendado no momento.</div>
+            </div>
+          ) : null}
+          {(data?.reboot_pending ?? []).map((item) => (
+            <div key={`${item.agent_id}-${item.last_seen_at}`} className="list-item">
+              <div>
+                <div style={{ fontWeight: 700 }}>
+                  {item.hostname} - {item.platform}
+                </div>
+                <div className="muted" style={{ marginTop: 4 }}>
+                  {item.primary_ip ?? "n/d"}
+                </div>
+                {item.post_patch_message ? (
+                  <div className="muted" style={{ marginTop: 4 }}>
+                    {item.post_patch_message}
+                  </div>
+                ) : null}
+                <div className="muted" style={{ marginTop: 4 }}>
+                  Ultimo heartbeat: {formatDateTimeSaoPaulo(item.last_seen_at)}
+                </div>
+              </div>
+              <div style={{ textAlign: "right", display: "grid", gap: 8, justifyItems: "end" }}>
+                <StatusBadge variant={item.post_patch_state === "reboot-scheduled" ? "ok" : "warn"}>
+                  {item.post_patch_state === "reboot-scheduled" ? "reboot agendado" : "reboot pendente"}
+                </StatusBadge>
+                {item.reboot_scheduled_at ? (
+                  <div className="muted">agendado em {formatDateTimeSaoPaulo(item.reboot_scheduled_at)}</div>
+                ) : null}
+              </div>
             </div>
           ))}
         </div>

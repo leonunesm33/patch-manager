@@ -25,6 +25,11 @@ class AgentInventorySnapshotModel(Base):
     kernel_version: Mapped[str] = mapped_column(String(120))
     agent_version: Mapped[str] = mapped_column(String(40))
     execution_mode: Mapped[str] = mapped_column(String(40))
+    post_patch_state: Mapped[str] = mapped_column(String(40), default="idle")
+    post_patch_message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    last_apply_result: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    last_apply_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reboot_scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

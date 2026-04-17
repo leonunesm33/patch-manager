@@ -1,7 +1,15 @@
+import json
 import platform
 import socket
-import json
 import subprocess
+
+
+def _as_list(value: object) -> list[dict[str, object]]:
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    if isinstance(value, dict):
+        return [value]
+    return []
 
 
 def _run_powershell_json(script: str) -> dict[str, object] | None:
@@ -11,7 +19,7 @@ def _run_powershell_json(script: str) -> dict[str, object] | None:
             check=False,
             capture_output=True,
             text=True,
-            timeout=45,
+            timeout=60,
         )
     except (OSError, subprocess.SubprocessError):
         return None
@@ -30,34 +38,86 @@ def _run_powershell_json(script: str) -> dict[str, object] | None:
 
 
 def _collect_windows_update_metrics() -> dict[str, object]:
-    script = """
+    script = r"""
 $hotfixCount = (Get-HotFix | Measure-Object).Count
-$updateSummary = ''
 $pendingCount = 0
+$updateSummary = ''
 $rebootRequired = $false
 $source = 'windows-update'
+$pendingUpdates = @()
+$installedUpdates = @()
+
 try {
   $session = New-Object -ComObject Microsoft.Update.Session
   $searcher = $session.CreateUpdateSearcher()
   $result = $searcher.Search("IsInstalled=0 and Type='Software'")
   $pendingCount = $result.Updates.Count
   $titles = @()
-  for ($i = 0; $i -lt [Math]::Min($result.Updates.Count, 3); $i++) {
-    $titles += $result.Updates.Item($i).Title
+  for ($i = 0; $i -lt [Math]::Min($result.Updates.Count, 25); $i++) {
+    $update = $result.Updates.Item($i)
+    $titles += $update.Title
+    $kbId = $null
+    try {
+      if ($update.KBArticleIDs.Count -gt 0) {
+        $kbId = "KB$($update.KBArticleIDs[0])"
+      }
+    } catch {}
+    $categories = @()
+    try {
+      foreach ($category in $update.Categories) {
+        $categories += $category.Name
+      }
+    } catch {}
+    $identifier = $update.Title
+    try {
+      $identifier = $update.Identity.UpdateID
+    } catch {}
+    $pendingUpdates += [PSCustomObject]@{
+      identifier = $identifier
+      title = $update.Title
+      current_version = $null
+      target_version = $null
+      source = $source
+      summary = ($categories -join '; ')
+      kb_id = $kbId
+      security_only = (($categories -match 'security').Count -gt 0) -or ($update.Title -match 'Security')
+      installed_at = $null
+    }
   }
-  $updateSummary = ($titles -join '; ')
+  $updateSummary = ($titles | Select-Object -First 3) -join '; '
 } catch {
   $source = 'windows-update-unavailable'
 }
-$rebootPath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Auto Update\\RebootRequired'
+
+$rebootPath = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired'
 if (Test-Path $rebootPath) { $rebootRequired = $true }
+
+$installedUpdates = Get-HotFix |
+  Sort-Object InstalledOn -Descending |
+  Select-Object -First 20 |
+  ForEach-Object {
+    [PSCustomObject]@{
+      identifier = $_.HotFixID
+      title = if ($_.Description) { $_.Description } else { $_.HotFixID }
+      current_version = $null
+      target_version = $null
+      source = if ($_.InstalledBy) { $_.InstalledBy } else { 'windows-update' }
+      summary = if ($_.Caption) { $_.Caption } else { $_.Description }
+      kb_id = $_.HotFixID
+      security_only = ($_.Description -match 'Security')
+      installed_at = if ($_.InstalledOn) { ([datetime]$_.InstalledOn).ToString('o') } else { $null }
+    }
+  }
+
 [PSCustomObject]@{
   installed_update_count = $hotfixCount
   upgradable_packages = $pendingCount
   pending_update_summary = $updateSummary
   reboot_required = $rebootRequired
   windows_update_source = $source
-} | ConvertTo-Json -Compress
+  pending_updates = $pendingUpdates
+  installed_updates = $installedUpdates
+} | ConvertTo-Json -Depth 5 -Compress
 """
     data = _run_powershell_json(script) or {}
     return {
@@ -65,7 +125,11 @@ if (Test-Path $rebootPath) { $rebootRequired = $true }
         "upgradable_packages": int(data.get("upgradable_packages", 0) or 0),
         "pending_update_summary": str(data.get("pending_update_summary", "") or ""),
         "reboot_required": bool(data.get("reboot_required", False)),
-        "windows_update_source": str(data.get("windows_update_source", "windows-update") or "windows-update"),
+        "windows_update_source": str(
+            data.get("windows_update_source", "windows-update") or "windows-update"
+        ),
+        "pending_updates": _as_list(data.get("pending_updates")),
+        "installed_updates": _as_list(data.get("installed_updates")),
     }
 
 
@@ -88,6 +152,8 @@ def collect_inventory(agent_version: str, execution_mode: str) -> dict[str, obje
         "installed_update_count": windows_metrics["installed_update_count"],
         "pending_update_summary": windows_metrics["pending_update_summary"],
         "windows_update_source": windows_metrics["windows_update_source"],
+        "pending_updates": windows_metrics["pending_updates"],
+        "installed_updates": windows_metrics["installed_updates"],
         "os_name": platform.system(),
         "os_version": platform.version(),
         "kernel_version": platform.release(),

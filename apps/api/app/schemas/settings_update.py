@@ -20,3 +20,4 @@ class LinuxExecutionModeUpdate(BaseModel):
 class BootstrapTokenUpdate(BaseModel):
     agent_bootstrap_token: str
     agent_install_server_url: str | None = None
+    expires_in_days: int | None = None

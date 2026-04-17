@@ -124,10 +124,11 @@ export function updateLinuxExecutionMode(
 export function updateBootstrapToken(
   agent_bootstrap_token: string,
   agent_install_server_url?: string,
+  expires_in_days?: number,
 ) {
   return http<BootstrapSettings>("/settings/bootstrap-token", {
     method: "PUT",
-    body: JSON.stringify({ agent_bootstrap_token, agent_install_server_url }),
+    body: JSON.stringify({ agent_bootstrap_token, agent_install_server_url, expires_in_days }),
   });
 }
 

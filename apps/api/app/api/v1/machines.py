@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.machine import MachineModel
 from app.repositories.agent_credential_repository import AgentCredentialRepository
+from app.repositories.agent_inventory_snapshot_repository import AgentInventorySnapshotRepository
 from app.repositories.machine_repository import MachineRepository
 from app.schemas.auth import UserResponse
 from app.schemas.machine import Machine, MachineCreate
@@ -63,20 +64,39 @@ def list_machines(
 ) -> list[Machine]:
     try:
         repository = MachineRepository(db)
+        snapshot_repository = AgentInventorySnapshotRepository(db)
         machines = repository.list_all()
         if machines:
             items: list[Machine] = []
             for machine in machines:
                 machine_status = machine.status
+                post_patch_state = None
+                post_patch_message = None
+                last_apply_at = None
+                reboot_scheduled_at = None
                 if machine.id.startswith("agent-"):
                     agent_id = machine.id.removeprefix("agent-")
+                    snapshot = snapshot_repository.get_by_agent_id(agent_id)
                     if not agent_registry_service.is_connected(
                         agent_id,
                         max_age_seconds=AGENT_CONNECTIVITY_MAX_AGE_SECONDS,
                     ):
                         machine_status = "offline"
+                    if snapshot is not None:
+                        post_patch_state = snapshot.post_patch_state
+                        post_patch_message = snapshot.post_patch_message
+                        last_apply_at = snapshot.last_apply_at
+                        reboot_scheduled_at = snapshot.reboot_scheduled_at
                 items.append(
-                    Machine.model_validate(machine).model_copy(update={"status": machine_status})
+                    Machine.model_validate(machine).model_copy(
+                        update={
+                            "status": machine_status,
+                            "post_patch_state": post_patch_state,
+                            "post_patch_message": post_patch_message,
+                            "last_apply_at": last_apply_at,
+                            "reboot_scheduled_at": reboot_scheduled_at,
+                        }
+                    )
                 )
             return items
     except SQLAlchemyError:

@@ -45,9 +45,36 @@ class AgentInventorySnapshotRepository:
             existing.kernel_version = snapshot.kernel_version
             existing.agent_version = snapshot.agent_version
             existing.execution_mode = snapshot.execution_mode
+            existing.post_patch_state = snapshot.post_patch_state
+            existing.post_patch_message = snapshot.post_patch_message
+            existing.last_apply_result = snapshot.last_apply_result
+            existing.last_apply_at = snapshot.last_apply_at
+            existing.reboot_scheduled_at = snapshot.reboot_scheduled_at
             self.session.add(existing)
         self.session.commit()
         stored = self.get_by_agent_id(snapshot.agent_id)
         if stored is None:
             raise RuntimeError("Agent inventory snapshot was not persisted")
         return stored
+
+    def update_post_patch_state(
+        self,
+        agent_id: str,
+        *,
+        post_patch_state: str,
+        post_patch_message: str | None = None,
+        last_apply_result: str | None = None,
+        last_apply_at=None,
+        reboot_scheduled_at=None,
+    ) -> AgentInventorySnapshotModel | None:
+        existing = self.get_by_agent_id(agent_id)
+        if existing is None:
+            return None
+        existing.post_patch_state = post_patch_state
+        existing.post_patch_message = post_patch_message
+        existing.last_apply_result = last_apply_result
+        existing.last_apply_at = last_apply_at
+        existing.reboot_scheduled_at = reboot_scheduled_at
+        self.session.add(existing)
+        self.session.commit()
+        return self.get_by_agent_id(agent_id)

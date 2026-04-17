@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { ActionMenu } from "@/components/common/action-menu";
 import { ConfirmModal } from "@/components/common/confirm-modal";
 import { StatusBadge } from "@/components/common/status-badge";
+import { fetchAgentInventoryDetail } from "@/features/agents/api";
+import { AgentInventoryDetailPanel } from "@/features/agents/components/agent-inventory-detail-panel";
+import type { AgentInventoryDetail } from "@/features/agents/types";
 import { formatDateTimeSaoPaulo } from "@/lib/datetime";
 import {
   approvePendingEnrollment,
@@ -50,6 +53,7 @@ export function SettingsPage() {
   const [approvalLoadingId, setApprovalLoadingId] = useState<string | null>(null);
   const [bootstrapTokenDraft, setBootstrapTokenDraft] = useState("");
   const [installServerUrlDraft, setInstallServerUrlDraft] = useState("");
+  const [bootstrapExpiryDaysDraft, setBootstrapExpiryDaysDraft] = useState("30");
   const [bootstrapLoading, setBootstrapLoading] = useState(false);
   const [allowedPatternsDraft, setAllowedPatternsDraft] = useState("");
   const [timeoutDraft, setTimeoutDraft] = useState("900");
@@ -60,6 +64,10 @@ export function SettingsPage() {
   const [eventFilter, setEventFilter] = useState<"all" | "info" | "warn" | "error">("all");
   const [exportLoading, setExportLoading] = useState(false);
   const [agentActionLoadingId, setAgentActionLoadingId] = useState<string | null>(null);
+  const [inventoryAgentId, setInventoryAgentId] = useState<string | null>(null);
+  const [inventoryDetail, setInventoryDetail] = useState<AgentInventoryDetail | null>(null);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [inventoryError, setInventoryError] = useState<string | null>(null);
   const [confirmAgentAction, setConfirmAgentAction] = useState<
     | {
         type: "revoke" | "reintegrate" | "reboot";
@@ -188,6 +196,7 @@ export function SettingsPage() {
         setSettings(settingsResponse);
         setBootstrapTokenDraft(settingsResponse.bootstrap.agent_bootstrap_token);
         setInstallServerUrlDraft(settingsResponse.bootstrap.agent_install_server_url);
+        setBootstrapExpiryDaysDraft("30");
         setAllowedPatternsDraft(settingsResponse.execution.allowed_package_patterns.join(", "));
         setTimeoutDraft(String(settingsResponse.execution.apt_apply_timeout_seconds));
         setRebootGraceDraft(String(settingsResponse.execution.reboot_grace_minutes));
@@ -402,7 +411,12 @@ export function SettingsPage() {
     setError(null);
     setBootstrapLoading(true);
     try {
-      const response = await updateBootstrapToken(bootstrapTokenDraft, installServerUrlDraft);
+      const expiresInDays = Number(bootstrapExpiryDaysDraft);
+      const response = await updateBootstrapToken(
+        bootstrapTokenDraft,
+        installServerUrlDraft,
+        Number.isFinite(expiresInDays) ? expiresInDays : undefined,
+      );
       setSettings((current) =>
         current
           ? {
@@ -507,6 +521,23 @@ export function SettingsPage() {
       setError(err instanceof Error ? err.message : "Falha ao exportar os eventos operacionais.");
     } finally {
       setExportLoading(false);
+    }
+  }
+
+  async function handleOpenInventory(agentId: string) {
+    setInventoryAgentId(agentId);
+    setInventoryLoading(true);
+    setInventoryError(null);
+    try {
+      const response = await fetchAgentInventoryDetail(agentId);
+      setInventoryDetail(response);
+    } catch (err) {
+      setInventoryDetail(null);
+      setInventoryError(
+        err instanceof Error ? err.message : "Falha ao carregar o inventario detalhado.",
+      );
+    } finally {
+      setInventoryLoading(false);
     }
   }
 
@@ -1032,6 +1063,28 @@ export function SettingsPage() {
           <h2 className="section-title">Bootstrap do agente</h2>
           <span className="muted">Token de cadastro inicial</span>
         </div>
+        {settings ? (
+          <div className="list-item" style={{ marginBottom: 12 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700 }}>Estado do bootstrap token</div>
+              <div className="muted" style={{ marginTop: 4 }}>
+                Rotacionado em{" "}
+                {settings.bootstrap.agent_bootstrap_token_rotated_at
+                  ? formatDateTimeSaoPaulo(settings.bootstrap.agent_bootstrap_token_rotated_at)
+                  : "sem registro"}
+              </div>
+              <div className="muted" style={{ marginTop: 4 }}>
+                Expira em{" "}
+                {settings.bootstrap.agent_bootstrap_token_expires_at
+                  ? formatDateTimeSaoPaulo(settings.bootstrap.agent_bootstrap_token_expires_at)
+                  : "sem expiracao configurada"}
+              </div>
+            </div>
+            <StatusBadge variant={settings.bootstrap.agent_bootstrap_token_is_expired ? "error" : "ok"}>
+              {settings.bootstrap.agent_bootstrap_token_is_expired ? "expirado" : "ativo"}
+            </StatusBadge>
+          </div>
+        ) : null}
         <div className="list-item">
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 700 }}>Bootstrap token</div>
@@ -1054,16 +1107,32 @@ export function SettingsPage() {
               Base usada para gerar o comando de instalacao remota do agente.
             </div>
           </div>
-          <input
-            className="input"
-            onChange={(event) => setInstallServerUrlDraft(event.target.value)}
-            style={{ maxWidth: 320 }}
-            type="text"
-            value={installServerUrlDraft}
-          />
-          <button
-            className="btn btn-primary"
-            disabled={bootstrapLoading}
+            <input
+              className="input"
+              onChange={(event) => setInstallServerUrlDraft(event.target.value)}
+              style={{ maxWidth: 320 }}
+              type="text"
+              value={installServerUrlDraft}
+            />
+          </div>
+          <div className="list-item" style={{ marginTop: 12 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700 }}>Expiracao do token (dias)</div>
+              <div className="muted" style={{ marginTop: 4 }}>
+                Ao salvar, o bootstrap token passa a expirar apos este periodo.
+              </div>
+            </div>
+            <input
+              className="input"
+              min="1"
+              onChange={(event) => setBootstrapExpiryDaysDraft(event.target.value)}
+              style={{ maxWidth: 160 }}
+              type="number"
+              value={bootstrapExpiryDaysDraft}
+            />
+            <button
+              className="btn btn-primary"
+              disabled={bootstrapLoading}
             onClick={() => void handleBootstrapTokenSave()}
             type="button"
           >
@@ -1326,6 +1395,11 @@ export function SettingsPage() {
                     label={`Acoes do agente rejeitado ${agent.agent_id}`}
                     items={[
                       {
+                        label: "Ver inventario detalhado",
+                        disabled: agentActionLoadingId === agent.agent_id,
+                        onSelect: () => void handleOpenInventory(agent.agent_id),
+                      },
+                      {
                         label: "Reabrir aprovacao",
                         disabled: agentActionLoadingId === agent.agent_id,
                         onSelect: () => setConfirmAgentAction({ type: "reopen-rejected", agent }),
@@ -1366,14 +1440,30 @@ export function SettingsPage() {
                   Ultimo registro: {agent.last_seen_at ? formatDateTimeSaoPaulo(agent.last_seen_at) : "sem data"}
                 </div>
               </div>
-              <div style={{ textAlign: "right", display: "grid", gap: 8, justifyItems: "end" }}>
-                <StatusBadge variant="warn">stopped</StatusBadge>
-                <div className="muted">
-                  modo {agent.execution_mode ?? "unknown"}
+                <div style={{ textAlign: "right", display: "grid", gap: 8, justifyItems: "end" }}>
+                  <StatusBadge variant="warn">stopped</StatusBadge>
+                  <div className="muted">
+                    modo {agent.execution_mode ?? "unknown"}
+                  </div>
+                  {agent.post_patch_state ? (
+                    <div className="muted" style={{ maxWidth: 240 }}>
+                      {agent.post_patch_state}
+                      {agent.post_patch_message ? ` - ${agent.post_patch_message}` : ""}
+                    </div>
+                  ) : null}
+                  <button
+                    className="btn"
+                    disabled={inventoryLoading && inventoryAgentId === agent.agent_id}
+                    onClick={() => void handleOpenInventory(agent.agent_id)}
+                    type="button"
+                  >
+                    {inventoryLoading && inventoryAgentId === agent.agent_id
+                      ? "Carregando..."
+                      : "Ver inventario"}
+                  </button>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
         </div>
       </section>
 
@@ -1454,11 +1544,22 @@ export function SettingsPage() {
                 <div className="muted" style={{ marginTop: 4 }}>
                   IP {agent.primary_ip ?? "n/d"} - {agent.package_manager ?? "sem gerenciador"}
                 </div>
-                <div className="muted" style={{ marginTop: 4 }}>
-                  {agent.installed_packages ?? 0} pacotes instalados - {agent.upgradable_packages ?? 0} atualizaveis
-                  {agent.reboot_required ? " - reboot pendente" : ""}
-                </div>
-                {agent.platform.toLowerCase() === "linux" && settings ? (
+                  <div className="muted" style={{ marginTop: 4 }}>
+                    {agent.installed_packages ?? 0} pacotes instalados - {agent.upgradable_packages ?? 0} atualizaveis
+                    {agent.reboot_required ? " - reboot pendente" : ""}
+                  </div>
+                  {agent.post_patch_state ? (
+                    <div className="muted" style={{ marginTop: 4 }}>
+                      Pos-patch: {agent.post_patch_state}
+                      {agent.post_patch_message ? ` - ${agent.post_patch_message}` : ""}
+                    </div>
+                  ) : null}
+                  {agent.reboot_scheduled_at ? (
+                    <div className="muted" style={{ marginTop: 4 }}>
+                      Reboot agendado em {formatDateTimeSaoPaulo(agent.reboot_scheduled_at)}
+                    </div>
+                  ) : null}
+                  {agent.platform.toLowerCase() === "linux" && settings ? (
                   <div className="muted" style={{ marginTop: 4 }}>
                     Guardrails ativos: apply real {settings.execution.real_apply_enabled ? "ligado" : "desligado"} -
                     security-only {settings.execution.allow_security_only ? "ligado" : "desligado"} - allowlist{" "}
@@ -1486,6 +1587,11 @@ export function SettingsPage() {
                   <ActionMenu
                     label={`Acoes do agente ${agent.agent_id}`}
                     items={[
+                      {
+                        label: "Ver inventario detalhado",
+                        disabled: agentActionLoadingId === agent.agent_id,
+                        onSelect: () => void handleOpenInventory(agent.agent_id),
+                      },
                       ...(agent.platform.toLowerCase() === "linux"
                         ? [
                             {
@@ -1514,6 +1620,16 @@ export function SettingsPage() {
           ))}
         </div>
       </section>
+      <AgentInventoryDetailPanel
+        detail={inventoryDetail}
+        error={inventoryError}
+        loading={inventoryLoading}
+        title={
+          inventoryAgentId
+            ? `Inventario detalhado do agente ${inventoryAgentId}`
+            : "Inventario detalhado"
+        }
+      />
       <section className="panel section">
         <div className="section-header">
           <h2 className="section-title">Eventos operacionais</h2>

@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import json
 from urllib.parse import quote, unquote
 
@@ -25,6 +25,8 @@ class SettingsService:
     WINDOWS_REBOOT_GRACE_MINUTES_KEY = "windows_reboot_grace_minutes"
     AGENT_BOOTSTRAP_TOKEN_KEY = "agent_bootstrap_token"
     AGENT_INSTALL_SERVER_URL_KEY = "agent_install_server_url"
+    AGENT_BOOTSTRAP_TOKEN_ROTATED_AT_KEY = "agent_bootstrap_token_rotated_at"
+    AGENT_BOOTSTRAP_TOKEN_EXPIRES_AT_KEY = "agent_bootstrap_token_expires_at"
     OPERATIONAL_EVENTS_KEY = "operational_events"
 
     def __init__(self, session: Session) -> None:
@@ -262,13 +264,51 @@ class SettingsService:
         setting = self.repository.get(self.AGENT_BOOTSTRAP_TOKEN_KEY)
         if setting is None or not setting.value.strip():
             self.repository.upsert(self.AGENT_BOOTSTRAP_TOKEN_KEY, "patch-manager-bootstrap-token")
+            self.repository.upsert(
+                self.AGENT_BOOTSTRAP_TOKEN_ROTATED_AT_KEY,
+                datetime.now(UTC).isoformat(),
+            )
             return "patch-manager-bootstrap-token"
         return setting.value
 
-    def set_agent_bootstrap_token(self, token: str) -> str:
+    def set_agent_bootstrap_token(self, token: str, expires_in_days: int | None = None) -> str:
         normalized = token.strip() or "patch-manager-bootstrap-token"
         self.repository.upsert(self.AGENT_BOOTSTRAP_TOKEN_KEY, normalized)
+        self.repository.upsert(
+            self.AGENT_BOOTSTRAP_TOKEN_ROTATED_AT_KEY,
+            datetime.now(UTC).isoformat(),
+        )
+        if expires_in_days is not None:
+            self.set_agent_bootstrap_token_expiry_days(expires_in_days)
         return normalized
+
+    def get_agent_bootstrap_token_rotated_at(self) -> str | None:
+        setting = self.repository.get(self.AGENT_BOOTSTRAP_TOKEN_ROTATED_AT_KEY)
+        if setting is None or not setting.value.strip():
+            return None
+        return setting.value.strip()
+
+    def get_agent_bootstrap_token_expires_at(self) -> str | None:
+        setting = self.repository.get(self.AGENT_BOOTSTRAP_TOKEN_EXPIRES_AT_KEY)
+        if setting is None or not setting.value.strip():
+            return None
+        return setting.value.strip()
+
+    def get_agent_bootstrap_token_is_expired(self) -> bool:
+        expires_at = self.get_agent_bootstrap_token_expires_at()
+        if not expires_at:
+            return False
+        try:
+            return datetime.fromisoformat(expires_at.replace("Z", "+00:00")) <= datetime.now(UTC)
+        except ValueError:
+            return False
+
+    def set_agent_bootstrap_token_expiry_days(self, expires_in_days: int) -> str:
+        normalized_days = max(expires_in_days, 1)
+        expires_at = datetime.now(UTC).replace(microsecond=0) + timedelta(days=normalized_days)
+        value = expires_at.isoformat()
+        self.repository.upsert(self.AGENT_BOOTSTRAP_TOKEN_EXPIRES_AT_KEY, value)
+        return value
 
     def get_agent_install_server_url(self) -> str:
         setting = self.repository.get(self.AGENT_INSTALL_SERVER_URL_KEY)

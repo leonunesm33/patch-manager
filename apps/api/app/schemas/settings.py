@@ -34,6 +34,9 @@ class ExecutionModeSetting(BaseModel):
 class BootstrapSetting(BaseModel):
     agent_bootstrap_token: str
     agent_install_server_url: str
+    agent_bootstrap_token_rotated_at: str | None = None
+    agent_bootstrap_token_expires_at: str | None = None
+    agent_bootstrap_token_is_expired: bool = False
 
 
 class OperationalEvent(BaseModel):

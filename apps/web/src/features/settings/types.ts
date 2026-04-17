@@ -25,6 +25,9 @@ export type ExecutionSettings = {
 export type BootstrapSettings = {
   agent_bootstrap_token: string;
   agent_install_server_url: string;
+  agent_bootstrap_token_rotated_at: string | null;
+  agent_bootstrap_token_expires_at: string | null;
+  agent_bootstrap_token_is_expired: boolean;
 };
 
 export type OperationalEvent = {
@@ -75,6 +78,11 @@ export type ConnectedAgent = {
   installed_update_count: number | null;
   pending_update_summary: string | null;
   windows_update_source: string | null;
+  post_patch_state: string | null;
+  post_patch_message: string | null;
+  last_apply_result: string | null;
+  last_apply_at: string | null;
+  reboot_scheduled_at: string | null;
   last_seen_at: string;
 };
 
@@ -108,6 +116,11 @@ export type StoppedAgent = {
   installed_update_count: number | null;
   pending_update_summary: string | null;
   windows_update_source: string | null;
+  post_patch_state: string | null;
+  post_patch_message: string | null;
+  last_apply_result: string | null;
+  last_apply_at: string | null;
+  reboot_scheduled_at: string | null;
   status: "stopped";
   last_seen_at: string | null;
 };

@@ -70,7 +70,13 @@ def get_bootstrap_token(
     x_bootstrap_token: str = Header(default=""),
     db: Session = Depends(get_db),
 ) -> str:
-    expected_token = SettingsService(db).get_agent_bootstrap_token()
+    settings_service = SettingsService(db)
+    expected_token = settings_service.get_agent_bootstrap_token()
+    if settings_service.get_agent_bootstrap_token_is_expired():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Bootstrap token expired",
+        )
     if x_bootstrap_token != expected_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

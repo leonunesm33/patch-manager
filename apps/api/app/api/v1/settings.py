@@ -54,6 +54,9 @@ def get_settings(
         bootstrap=BootstrapSetting(
             agent_bootstrap_token=settings_service.get_agent_bootstrap_token(),
             agent_install_server_url=settings_service.get_agent_install_server_url(),
+            agent_bootstrap_token_rotated_at=settings_service.get_agent_bootstrap_token_rotated_at(),
+            agent_bootstrap_token_expires_at=settings_service.get_agent_bootstrap_token_expires_at(),
+            agent_bootstrap_token_is_expired=settings_service.get_agent_bootstrap_token_is_expired(),
         ),
         events=settings_service.list_operational_events(),
     )
@@ -163,7 +166,10 @@ def update_bootstrap_token(
     settings_service = SettingsService(db)
     previous_token = settings_service.get_agent_bootstrap_token()
     previous_server_url = settings_service.get_agent_install_server_url()
-    token = settings_service.set_agent_bootstrap_token(payload.agent_bootstrap_token)
+    token = settings_service.set_agent_bootstrap_token(
+        payload.agent_bootstrap_token,
+        expires_in_days=payload.expires_in_days,
+    )
     server_url = settings_service.get_agent_install_server_url()
     if payload.agent_install_server_url is not None:
         server_url = settings_service.set_agent_install_server_url(payload.agent_install_server_url)
@@ -172,6 +178,12 @@ def update_bootstrap_token(
             "bootstrap_token_updated",
             current_user.username,
             "Atualizou o bootstrap token do agente.",
+        )
+    if payload.expires_in_days is not None:
+        settings_service.record_operational_event(
+            "bootstrap_token_expiry_updated",
+            current_user.username,
+            f"Atualizou a expiracao do bootstrap token para {payload.expires_in_days} dias.",
         )
     if server_url != previous_server_url:
         settings_service.record_operational_event(
@@ -182,6 +194,9 @@ def update_bootstrap_token(
     return BootstrapSetting(
         agent_bootstrap_token=token,
         agent_install_server_url=server_url,
+        agent_bootstrap_token_rotated_at=settings_service.get_agent_bootstrap_token_rotated_at(),
+        agent_bootstrap_token_expires_at=settings_service.get_agent_bootstrap_token_expires_at(),
+        agent_bootstrap_token_is_expired=settings_service.get_agent_bootstrap_token_is_expired(),
     )
 
 

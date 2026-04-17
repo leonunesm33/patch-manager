@@ -1,4 +1,7 @@
 import { useEffect, useState } from "react";
+import { fetchAgentInventoryDetail } from "@/features/agents/api";
+import { AgentInventoryDetailPanel } from "@/features/agents/components/agent-inventory-detail-panel";
+import type { AgentInventoryDetail } from "@/features/agents/types";
 import {
   createMachine,
   deleteMachine,
@@ -17,6 +20,15 @@ function getVariant(status: string) {
   return "error";
 }
 
+function getPostPatchVariant(state: string | null) {
+  if (state === "reboot-scheduled" || state === "apply-completed" || state === "reboot-cleared") {
+    return "ok";
+  }
+  if (state === "reboot-required") return "warn";
+  if (state === "apply-failed") return "error";
+  return "warn";
+}
+
 export function MachinesPage() {
   const [machines, setMachines] = useState<Machine[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,6 +37,10 @@ export function MachinesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Machine | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [inventoryDetail, setInventoryDetail] = useState<AgentInventoryDetail | null>(null);
+  const [inventoryAgentId, setInventoryAgentId] = useState<string | null>(null);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [inventoryError, setInventoryError] = useState<string | null>(null);
   const [form, setForm] = useState<MachineCreate>({
     name: "",
     ip: "",
@@ -138,6 +154,23 @@ export function MachinesPage() {
     }
   }
 
+  async function handleOpenInventory(machine: Machine) {
+    if (!machine.id.startsWith("agent-")) return;
+    const agentId = machine.id.replace(/^agent-/, "");
+    setInventoryAgentId(agentId);
+    setInventoryLoading(true);
+    setInventoryError(null);
+    try {
+      const response = await fetchAgentInventoryDetail(agentId);
+      setInventoryDetail(response);
+    } catch (err) {
+      setInventoryDetail(null);
+      setInventoryError(err instanceof Error ? err.message : "Falha ao carregar o inventario detalhado.");
+    } finally {
+      setInventoryLoading(false);
+    }
+  }
+
   return (
     <div className="split-grid">
       <ConfirmModal
@@ -178,6 +211,7 @@ export function MachinesPage() {
               <th>Plataforma</th>
               <th>Grupo</th>
               <th>Patches pendentes</th>
+              <th>Pos-patch</th>
               <th>Ultimo check-in</th>
               <th>Status</th>
               <th>Acoes</th>
@@ -198,6 +232,32 @@ export function MachinesPage() {
                 <td>{machine.platform}</td>
                 <td>{machine.group}</td>
                 <td>{machine.pending_patches}</td>
+                <td>
+                  {machine.post_patch_state ? (
+                    <div style={{ display: "grid", gap: 6 }}>
+                      <StatusBadge variant={getPostPatchVariant(machine.post_patch_state)}>
+                        {machine.post_patch_state}
+                      </StatusBadge>
+                      {machine.post_patch_message ? (
+                        <div className="muted" style={{ maxWidth: 220 }}>
+                          {machine.post_patch_message}
+                        </div>
+                      ) : null}
+                      {machine.reboot_scheduled_at ? (
+                        <div className="muted">
+                          reboot em {formatDateTimeSaoPaulo(machine.reboot_scheduled_at)}
+                        </div>
+                      ) : null}
+                      {machine.last_apply_at ? (
+                        <div className="muted">
+                          ultimo apply em {formatDateTimeSaoPaulo(machine.last_apply_at)}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <span className="muted">sem estado</span>
+                  )}
+                </td>
                 <td className="code">{formatDateTimeSaoPaulo(machine.last_check_in)}</td>
                 <td>
                   <StatusBadge variant={getVariant(machine.status)}>
@@ -208,6 +268,11 @@ export function MachinesPage() {
                   <ActionMenu
                     label={`Abrir acoes da maquina ${machine.name}`}
                     items={[
+                      {
+                        label: "Ver inventario detalhado",
+                        disabled: !machine.id.startsWith("agent-"),
+                        onSelect: () => void handleOpenInventory(machine),
+                      },
                       {
                         label: "Editar",
                         onSelect: () => handleEditMachine(machine),
@@ -225,6 +290,16 @@ export function MachinesPage() {
           </tbody>
         </table>
       </section>
+      <AgentInventoryDetailPanel
+        detail={inventoryDetail}
+        error={inventoryError}
+        loading={inventoryLoading}
+        title={
+          inventoryAgentId
+            ? `Inventario detalhado do host gerenciado por ${inventoryAgentId}`
+            : "Inventario detalhado do host"
+        }
+      />
 
       <section className="panel section">
         <div className="section-header">

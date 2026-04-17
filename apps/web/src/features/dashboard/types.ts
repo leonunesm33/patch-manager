@@ -4,6 +4,7 @@ export type DashboardSummary = {
   compliance_rate: number;
   failed_jobs: number;
   reboot_pending_hosts: number;
+  reboot_scheduled_hosts: number;
   pending_agent_commands: number;
   windows_pending_updates: number;
 };
@@ -31,6 +32,9 @@ export type RebootPendingItem = {
   hostname: string;
   platform: string;
   primary_ip: string | null;
+  post_patch_state: string | null;
+  post_patch_message: string | null;
+  reboot_scheduled_at: string | null;
   last_seen_at: string;
 };
 

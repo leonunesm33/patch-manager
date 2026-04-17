@@ -14,12 +14,14 @@ from app.core.security import hash_password
 from app.models.agent_credential import AgentCredentialModel
 from app.models.agent_command import AgentCommandModel
 from app.models.agent_enrollment import AgentEnrollmentModel
+from app.models.agent_inventory_item import AgentInventoryItemModel
 from app.models.agent_inventory_snapshot import AgentInventorySnapshotModel
 from app.models.execution_log import ExecutionLogModel
 from app.models.machine import MachineModel
 from app.repositories.agent_command_repository import AgentCommandRepository
 from app.repositories.agent_credential_repository import AgentCredentialRepository
 from app.repositories.agent_enrollment_repository import AgentEnrollmentRepository
+from app.repositories.agent_inventory_item_repository import AgentInventoryItemRepository
 from app.repositories.agent_inventory_snapshot_repository import AgentInventorySnapshotRepository
 from app.repositories.execution_log_repository import ExecutionLogRepository
 from app.repositories.patch_job_repository import PatchJobRepository
@@ -29,6 +31,8 @@ from app.schemas.agent import (
     AgentCommandPollRequest,
     AgentCommandHistoryItem,
     AgentInventorySnapshotItem,
+    AgentInventoryDetailItem,
+    AgentInventoryDetailResponse,
     AgentCommandResponse,
     AgentCommandResultRequest,
     AgentCheckInRequest,
@@ -643,8 +647,27 @@ def list_patch_jobs(
 @router.get("/connected", response_model=list[ConnectedAgentResponse])
 def list_connected_agents(
     _: Annotated[UserResponse, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
 ) -> list[ConnectedAgentResponse]:
-    return agent_registry_service.list_connected()
+    snapshot_repository = AgentInventorySnapshotRepository(db)
+    enriched_agents: list[ConnectedAgentResponse] = []
+    for agent in agent_registry_service.list_connected():
+        snapshot = snapshot_repository.get_by_agent_id(agent.agent_id)
+        if snapshot is None:
+            enriched_agents.append(agent)
+            continue
+        enriched_agents.append(
+            agent.model_copy(
+                update={
+                    "post_patch_state": snapshot.post_patch_state,
+                    "post_patch_message": snapshot.post_patch_message,
+                    "last_apply_result": snapshot.last_apply_result,
+                    "last_apply_at": snapshot.last_apply_at,
+                    "reboot_scheduled_at": snapshot.reboot_scheduled_at,
+                }
+            )
+        )
+    return enriched_agents
 
 
 @router.get("/revoked", response_model=list[RevokedAgentResponse])
@@ -718,6 +741,11 @@ def list_stopped_agents(
                 installed_update_count=snapshot.installed_update_count if snapshot else None,
                 pending_update_summary=snapshot.pending_update_summary if snapshot else None,
                 windows_update_source=snapshot.windows_update_source if snapshot else None,
+                post_patch_state=snapshot.post_patch_state if snapshot else None,
+                post_patch_message=snapshot.post_patch_message if snapshot else None,
+                last_apply_result=snapshot.last_apply_result if snapshot else None,
+                last_apply_at=snapshot.last_apply_at if snapshot else None,
+                reboot_scheduled_at=snapshot.reboot_scheduled_at if snapshot else None,
                 last_seen_at=(
                     snapshot.updated_at
                     if snapshot is not None
@@ -885,6 +913,40 @@ def list_agent_inventory_snapshots(
     return [AgentInventorySnapshotItem.model_validate(item) for item in repository.list_recent()]
 
 
+@router.get("/inventory-details/{agent_id}", response_model=AgentInventoryDetailResponse)
+def get_agent_inventory_details(
+    agent_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[UserResponse, Depends(get_current_user)],
+) -> AgentInventoryDetailResponse:
+    snapshot_repository = AgentInventorySnapshotRepository(db)
+    item_repository = AgentInventoryItemRepository(db)
+    snapshot = snapshot_repository.get_by_agent_id(agent_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Agent inventory not found")
+
+    pending_updates = [
+        AgentInventoryDetailItem.model_validate(item)
+        for item in item_repository.list_pending_for_agent(agent_id)
+    ]
+    installed_updates = [
+        AgentInventoryDetailItem.model_validate(item)
+        for item in item_repository.list_installed_for_agent(agent_id)
+    ]
+
+    return AgentInventoryDetailResponse(
+        agent_id=snapshot.agent_id,
+        platform=snapshot.platform,
+        hostname=snapshot.hostname,
+        package_manager=snapshot.package_manager,
+        pending_count=snapshot.upgradable_packages,
+        installed_count=snapshot.installed_update_count or snapshot.installed_packages,
+        updated_at=snapshot.updated_at,
+        pending_updates=pending_updates,
+        installed_updates=installed_updates,
+    )
+
+
 @router.get("/enrollments/pending", response_model=list[PendingAgentEnrollmentResponse])
 def list_pending_enrollments(
     db: Annotated[Session, Depends(get_db)],
@@ -1034,7 +1096,28 @@ def submit_agent_inventory(
         payload.agent_version,
         payload.execution_mode,
     )
-    AgentInventorySnapshotRepository(db).upsert(
+    snapshot_repository = AgentInventorySnapshotRepository(db)
+    existing_snapshot = snapshot_repository.get_by_agent_id(payload.agent_id)
+    preserved_post_patch_state = existing_snapshot.post_patch_state if existing_snapshot else "idle"
+    preserved_post_patch_message = existing_snapshot.post_patch_message if existing_snapshot else None
+    preserved_last_apply_result = existing_snapshot.last_apply_result if existing_snapshot else None
+    preserved_last_apply_at = existing_snapshot.last_apply_at if existing_snapshot else None
+    preserved_reboot_scheduled_at = existing_snapshot.reboot_scheduled_at if existing_snapshot else None
+
+    if not payload.reboot_required and preserved_post_patch_state in {"reboot-required", "reboot-scheduled"}:
+        preserved_post_patch_state = "reboot-cleared"
+        preserved_post_patch_message = "Host voltou sem reboot pendente apos o ultimo ciclo."
+        preserved_reboot_scheduled_at = None
+        agent_registry_service.update_post_patch_state(
+            payload.agent_id,
+            post_patch_state=preserved_post_patch_state,
+            post_patch_message=preserved_post_patch_message,
+            last_apply_result=preserved_last_apply_result,
+            last_apply_at=preserved_last_apply_at,
+            reboot_scheduled_at=preserved_reboot_scheduled_at,
+        )
+
+    snapshot_repository.upsert(
         AgentInventorySnapshotModel(
             agent_id=payload.agent_id,
             platform=payload.platform,
@@ -1052,7 +1135,53 @@ def submit_agent_inventory(
             kernel_version=payload.kernel_version,
             agent_version=payload.agent_version,
             execution_mode=payload.execution_mode,
+            post_patch_state=preserved_post_patch_state,
+            post_patch_message=preserved_post_patch_message,
+            last_apply_result=preserved_last_apply_result,
+            last_apply_at=preserved_last_apply_at,
+            reboot_scheduled_at=preserved_reboot_scheduled_at,
         )
+    )
+    AgentInventoryItemRepository(db).replace_for_agent(
+        payload.agent_id,
+        [
+            *[
+                AgentInventoryItemModel(
+                    agent_id=payload.agent_id,
+                    platform=payload.platform,
+                    item_type="pending",
+                    identifier=item.identifier,
+                    title=item.title,
+                    current_version=item.current_version,
+                    target_version=item.target_version,
+                    source=item.source,
+                    summary=item.summary,
+                    kb_id=item.kb_id,
+                    security_only=item.security_only,
+                    installed_at=item.installed_at,
+                    sort_order=index,
+                )
+                for index, item in enumerate(payload.pending_updates)
+            ],
+            *[
+                AgentInventoryItemModel(
+                    agent_id=payload.agent_id,
+                    platform=payload.platform,
+                    item_type="installed",
+                    identifier=item.identifier,
+                    title=item.title,
+                    current_version=item.current_version,
+                    target_version=item.target_version,
+                    source=item.source,
+                    summary=item.summary,
+                    kb_id=item.kb_id,
+                    security_only=item.security_only,
+                    installed_at=item.installed_at,
+                    sort_order=index,
+                )
+                for index, item in enumerate(payload.installed_updates)
+            ],
+        ],
     )
 
     machine_repository = MachineRepository(db)
@@ -1236,6 +1365,7 @@ def submit_agent_job_result(
     patch_repository = PatchRepository(db)
     machine_repository = MachineRepository(db)
     execution_log_repository = ExecutionLogRepository(db)
+    snapshot_repository = AgentInventorySnapshotRepository(db)
 
     patch = patch_repository.get_by_id(job.patch_id)
     machine = machine_repository.get_by_id(job.machine_id)
@@ -1273,6 +1403,9 @@ def submit_agent_job_result(
     if job.platform.lower() == "linux" and execution_mode == "apply":
         settings_service = SettingsService(db)
         if result == "applied":
+            post_patch_state = "apply-completed"
+            post_patch_message = f"Apply Linux concluido em {job.machine_name}."
+            reboot_scheduled_at = None
             settings_service.record_operational_event(
                 "linux_apply_completed",
                 payload.agent_id,
@@ -1281,6 +1414,11 @@ def submit_agent_job_result(
             if payload.reboot_required:
                 reboot_policy = settings_service.get_linux_reboot_policy()
                 grace_minutes = settings_service.get_linux_reboot_grace_minutes()
+                post_patch_state = "reboot-scheduled" if payload.reboot_scheduled else "reboot-required"
+                post_patch_message = payload.reboot_message or (
+                    f"Host {job.machine_name} requer reboot apos apply com politica {reboot_policy}."
+                )
+                reboot_scheduled_at = datetime.now(UTC) if payload.reboot_scheduled else None
                 settings_service.record_operational_event(
                     "linux_reboot_required",
                     payload.agent_id,
@@ -1293,10 +1431,42 @@ def submit_agent_job_result(
                         payload.reboot_message
                         or f"Reboot agendado para {job.machine_name} apos apply do patch {job.patch_id}.",
                     )
+            snapshot_repository.update_post_patch_state(
+                payload.agent_id,
+                post_patch_state=post_patch_state,
+                post_patch_message=post_patch_message,
+                last_apply_result=result,
+                last_apply_at=datetime.now(UTC),
+                reboot_scheduled_at=reboot_scheduled_at,
+            )
+            agent_registry_service.update_post_patch_state(
+                payload.agent_id,
+                post_patch_state=post_patch_state,
+                post_patch_message=post_patch_message,
+                last_apply_result=result,
+                last_apply_at=datetime.now(UTC),
+                reboot_scheduled_at=reboot_scheduled_at,
+            )
         else:
             summary = f"Apply Linux falhou em {job.machine_name} para o patch {job.patch_id}."
             if payload.error_message:
                 summary = f"{summary} {payload.error_message}"
+            snapshot_repository.update_post_patch_state(
+                payload.agent_id,
+                post_patch_state="apply-failed",
+                post_patch_message=payload.error_message or summary,
+                last_apply_result=result,
+                last_apply_at=datetime.now(UTC),
+                reboot_scheduled_at=None,
+            )
+            agent_registry_service.update_post_patch_state(
+                payload.agent_id,
+                post_patch_state="apply-failed",
+                post_patch_message=payload.error_message or summary,
+                last_apply_result=result,
+                last_apply_at=datetime.now(UTC),
+                reboot_scheduled_at=None,
+            )
             settings_service.record_operational_event(
                 "linux_apply_failed",
                 payload.agent_id,
@@ -1305,6 +1475,9 @@ def submit_agent_job_result(
     elif job.platform.lower() == "windows" and execution_mode == "apply":
         settings_service = SettingsService(db)
         if result == "applied":
+            post_patch_state = "apply-completed"
+            post_patch_message = f"Apply Windows concluido em {job.machine_name}."
+            reboot_scheduled_at = None
             settings_service.record_operational_event(
                 "windows_apply_completed",
                 payload.agent_id,
@@ -1313,6 +1486,11 @@ def submit_agent_job_result(
             if payload.reboot_required:
                 reboot_policy = settings_service.get_windows_reboot_policy()
                 grace_minutes = settings_service.get_windows_reboot_grace_minutes()
+                post_patch_state = "reboot-scheduled" if payload.reboot_scheduled else "reboot-required"
+                post_patch_message = payload.reboot_message or (
+                    f"Host {job.machine_name} requer reboot apos apply com politica {reboot_policy}."
+                )
+                reboot_scheduled_at = datetime.now(UTC) if payload.reboot_scheduled else None
                 settings_service.record_operational_event(
                     "windows_reboot_required",
                     payload.agent_id,
@@ -1325,10 +1503,42 @@ def submit_agent_job_result(
                         payload.reboot_message
                         or f"Reboot agendado para {job.machine_name} apos apply do patch {job.patch_id}.",
                     )
+            snapshot_repository.update_post_patch_state(
+                payload.agent_id,
+                post_patch_state=post_patch_state,
+                post_patch_message=post_patch_message,
+                last_apply_result=result,
+                last_apply_at=datetime.now(UTC),
+                reboot_scheduled_at=reboot_scheduled_at,
+            )
+            agent_registry_service.update_post_patch_state(
+                payload.agent_id,
+                post_patch_state=post_patch_state,
+                post_patch_message=post_patch_message,
+                last_apply_result=result,
+                last_apply_at=datetime.now(UTC),
+                reboot_scheduled_at=reboot_scheduled_at,
+            )
         else:
             summary = f"Apply Windows falhou em {job.machine_name} para o patch {job.patch_id}."
             if payload.error_message:
                 summary = f"{summary} {payload.error_message}"
+            snapshot_repository.update_post_patch_state(
+                payload.agent_id,
+                post_patch_state="apply-failed",
+                post_patch_message=payload.error_message or summary,
+                last_apply_result=result,
+                last_apply_at=datetime.now(UTC),
+                reboot_scheduled_at=None,
+            )
+            agent_registry_service.update_post_patch_state(
+                payload.agent_id,
+                post_patch_state="apply-failed",
+                post_patch_message=payload.error_message or summary,
+                last_apply_result=result,
+                last_apply_at=datetime.now(UTC),
+                reboot_scheduled_at=None,
+            )
             settings_service.record_operational_event(
                 "windows_apply_failed",
                 payload.agent_id,

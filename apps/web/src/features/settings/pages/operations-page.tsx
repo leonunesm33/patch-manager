@@ -13,10 +13,12 @@ import {
   fetchPendingEnrollments,
   fetchRejectedEnrollments,
   fetchRevokedAgents,
+  reintegrateConnectedAgent,
   reopenRejectedEnrollment,
   rejectPendingEnrollment,
   requestConnectedAgentReboot,
   requeueRevokedAgent,
+  revokeConnectedAgent,
 } from "@/features/settings/api";
 import type {
   AgentCommandHistoryItem,
@@ -39,6 +41,9 @@ export function OperationsPage() {
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [selectedPendingAgents, setSelectedPendingAgents] = useState<string[]>([]);
   const [selectedRebootAgents, setSelectedRebootAgents] = useState<string[]>([]);
+  const [selectedConnectedAgents, setSelectedConnectedAgents] = useState<string[]>([]);
+  const [selectedRejectedAgents, setSelectedRejectedAgents] = useState<string[]>([]);
+  const [selectedRevokedAgents, setSelectedRevokedAgents] = useState<string[]>([]);
 
   async function load() {
     const [
@@ -210,6 +215,66 @@ export function OperationsPage() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao solicitar reboot para os hosts selecionados.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  async function handleBulkReopenRejected() {
+    if (selectedRejectedAgents.length === 0) return;
+    setError(null);
+    setActionLoadingId("bulk-reopen-rejected");
+    try {
+      await Promise.all(selectedRejectedAgents.map((agentId) => reopenRejectedEnrollment(agentId)));
+      setSelectedRejectedAgents([]);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao reabrir os agentes rejeitados selecionados.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  async function handleBulkRequeueRevoked() {
+    if (selectedRevokedAgents.length === 0) return;
+    setError(null);
+    setActionLoadingId("bulk-requeue-revoked");
+    try {
+      await Promise.all(selectedRevokedAgents.map((agentId) => requeueRevokedAgent(agentId)));
+      setSelectedRevokedAgents([]);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao reabrir os agentes revogados selecionados.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  async function handleBulkReintegrateConnected() {
+    if (selectedConnectedAgents.length === 0) return;
+    setError(null);
+    setActionLoadingId("bulk-reintegrate");
+    try {
+      await Promise.all(selectedConnectedAgents.map((agentId) => reintegrateConnectedAgent(agentId)));
+      setSelectedConnectedAgents([]);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao reintegrar os agentes conectados selecionados.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  async function handleBulkRevokeConnected() {
+    if (selectedConnectedAgents.length === 0) return;
+    setError(null);
+    setActionLoadingId("bulk-revoke");
+    try {
+      await Promise.all(selectedConnectedAgents.map((agentId) => revokeConnectedAgent(agentId)));
+      setSelectedConnectedAgents([]);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao revogar os agentes conectados selecionados.");
     } finally {
       setActionLoadingId(null);
     }
@@ -433,6 +498,81 @@ export function OperationsPage() {
         </section>
       </section>
 
+      <section className="panel section">
+        <div className="section-header">
+          <h2 className="section-title">Agentes conectados</h2>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <span className="muted">{connectedAgents.length} itens</span>
+            <button
+              className="btn"
+              disabled={selectedConnectedAgents.length === 0 || actionLoadingId === "bulk-reintegrate"}
+              onClick={() => void handleBulkReintegrateConnected()}
+              type="button"
+            >
+              Reintegrar em lote
+            </button>
+            <button
+              className="btn"
+              disabled={selectedConnectedAgents.length === 0 || actionLoadingId === "bulk-revoke"}
+              onClick={() => void handleBulkRevokeConnected()}
+              type="button"
+            >
+              Revogar em lote
+            </button>
+          </div>
+        </div>
+        <div className="list">
+          {connectedAgents.length === 0 ? (
+            <div className="list-item">
+              <div className="muted">Nenhum agente conectado agora.</div>
+            </div>
+          ) : null}
+          {connectedAgents.map((agent) => (
+            <div key={agent.agent_id} className="list-item">
+              <div>
+                <label style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 700 }}>
+                  <input
+                    checked={selectedConnectedAgents.includes(agent.agent_id)}
+                    onChange={(event) =>
+                      setSelectedConnectedAgents((current) =>
+                        event.target.checked
+                          ? [...current, agent.agent_id]
+                          : current.filter((item) => item !== agent.agent_id),
+                      )
+                    }
+                    type="checkbox"
+                  />
+                  {agent.hostname}
+                </label>
+                <div className="muted" style={{ marginTop: 4 }}>
+                  {agent.platform} - {agent.primary_ip ?? "n/d"}
+                </div>
+                <div className="muted" style={{ marginTop: 4 }}>
+                  {agent.post_patch_state
+                    ? `pos-patch: ${agent.post_patch_state}`
+                    : `modo ${agent.execution_mode ?? "unknown"}`}
+                </div>
+              </div>
+              <ActionMenu
+                items={[
+                  {
+                    label: "Forcar reintegracao",
+                    disabled: actionLoadingId === agent.agent_id,
+                    onSelect: () => void reintegrateConnectedAgent(agent.agent_id).then(load),
+                  },
+                  {
+                    label: "Revogar agente",
+                    disabled: actionLoadingId === agent.agent_id,
+                    onSelect: () => void revokeConnectedAgent(agent.agent_id).then(load),
+                    tone: "danger",
+                  },
+                ]}
+              />
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section className="content-grid">
         <section className="panel section">
           <div className="section-header">
@@ -510,7 +650,17 @@ export function OperationsPage() {
         <section className="panel section">
           <div className="section-header">
             <h2 className="section-title">Agentes rejeitados</h2>
-            <span className="muted">{rejectedEnrollments.length} itens</span>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <span className="muted">{rejectedEnrollments.length} itens</span>
+              <button
+                className="btn"
+                disabled={selectedRejectedAgents.length === 0 || actionLoadingId === "bulk-reopen-rejected"}
+                onClick={() => void handleBulkReopenRejected()}
+                type="button"
+              >
+                Reabrir em lote
+              </button>
+            </div>
           </div>
           <div className="list">
             {rejectedEnrollments.length === 0 ? (
@@ -521,7 +671,20 @@ export function OperationsPage() {
             {rejectedEnrollments.map((agent) => (
               <div key={agent.agent_id} className="list-item">
                 <div>
-                  <div style={{ fontWeight: 700 }}>{agent.hostname}</div>
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 700 }}>
+                    <input
+                      checked={selectedRejectedAgents.includes(agent.agent_id)}
+                      onChange={(event) =>
+                        setSelectedRejectedAgents((current) =>
+                          event.target.checked
+                            ? [...current, agent.agent_id]
+                            : current.filter((item) => item !== agent.agent_id),
+                        )
+                      }
+                      type="checkbox"
+                    />
+                    {agent.hostname}
+                  </label>
                   <div className="muted" style={{ marginTop: 4 }}>
                     {agent.platform} - {agent.primary_ip}
                   </div>
@@ -546,7 +709,17 @@ export function OperationsPage() {
         <section className="panel section">
           <div className="section-header">
             <h2 className="section-title">Agentes revogados</h2>
-            <span className="muted">{revokedAgents.length} itens</span>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <span className="muted">{revokedAgents.length} itens</span>
+              <button
+                className="btn"
+                disabled={selectedRevokedAgents.length === 0 || actionLoadingId === "bulk-requeue-revoked"}
+                onClick={() => void handleBulkRequeueRevoked()}
+                type="button"
+              >
+                Reabrir em lote
+              </button>
+            </div>
           </div>
           <div className="list">
             {revokedAgents.length === 0 ? (
@@ -557,7 +730,20 @@ export function OperationsPage() {
             {revokedAgents.map((agent) => (
               <div key={agent.agent_id} className="list-item">
                 <div>
-                  <div style={{ fontWeight: 700 }}>{agent.hostname ?? agent.agent_id}</div>
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 700 }}>
+                    <input
+                      checked={selectedRevokedAgents.includes(agent.agent_id)}
+                      onChange={(event) =>
+                        setSelectedRevokedAgents((current) =>
+                          event.target.checked
+                            ? [...current, agent.agent_id]
+                            : current.filter((item) => item !== agent.agent_id),
+                        )
+                      }
+                      type="checkbox"
+                    />
+                    {agent.hostname ?? agent.agent_id}
+                  </label>
                   <div className="muted" style={{ marginTop: 4 }}>
                     {agent.platform} - {agent.primary_ip ?? "n/d"}
                   </div>
