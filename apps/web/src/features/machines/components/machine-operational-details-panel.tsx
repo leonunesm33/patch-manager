@@ -122,7 +122,7 @@ export function MachineOperationalDetailsPanel({
                     {details.machine.name} - {details.machine.platform}
                   </div>
                   <div className="muted" style={{ marginTop: 4 }}>
-                    {details.machine.group} - {details.machine.ip}
+                    {details.machine.environment} - {details.machine.group} - {details.machine.ip}
                   </div>
                   {details.agent_id ? (
                     <div className="muted" style={{ marginTop: 4 }}>

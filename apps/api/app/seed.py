@@ -22,7 +22,10 @@ def seed_initial_data() -> None:
                     username=settings.seed_admin_username,
                     full_name=settings.seed_admin_full_name,
                     password_hash=hash_password(settings.seed_admin_password),
+                    role=settings.seed_admin_role,
                     is_active=True,
+                    must_change_password=settings.seed_admin_force_password_change,
+                    password_changed_at=None,
                 )
             )
 
@@ -45,6 +48,7 @@ def seed_initial_data() -> None:
                         name="SRV-WEB-01",
                         ip="10.0.1.21",
                         platform="Windows",
+                        environment="production",
                         group="Web Servers",
                         status="online",
                         pending_patches=4,
@@ -56,6 +60,7 @@ def seed_initial_data() -> None:
                         name="SRV-DB-02",
                         ip="10.0.2.11",
                         platform="Windows",
+                        environment="production",
                         group="Database",
                         status="warning",
                         pending_patches=7,
@@ -67,6 +72,7 @@ def seed_initial_data() -> None:
                         name="ubuntu-prod-03",
                         ip="10.1.4.33",
                         platform="Ubuntu",
+                        environment="production",
                         group="Linux Production",
                         status="online",
                         pending_patches=3,

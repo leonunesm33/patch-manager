@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from typing import Callable
 
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -45,6 +46,32 @@ def get_current_user(
         raise credentials_exception
 
     return UserResponse.model_validate(user)
+
+
+ROLE_LEVELS = {
+    "viewer": 10,
+    "operator": 20,
+    "admin": 30,
+}
+
+
+def require_role(minimum_role: str) -> Callable[[UserResponse], UserResponse]:
+    def dependency(current_user: UserResponse = Depends(get_current_user)) -> UserResponse:
+        user_level = ROLE_LEVELS.get(current_user.role, 0)
+        required_level = ROLE_LEVELS.get(minimum_role, 0)
+        if user_level < required_level:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Requires {minimum_role} role",
+            )
+        return current_user
+
+    return dependency
+
+
+require_viewer = require_role("viewer")
+require_operator = require_role("operator")
+require_admin = require_role("admin")
 
 
 def get_agent_identity(

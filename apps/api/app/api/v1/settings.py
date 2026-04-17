@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_db, require_admin, require_viewer
 from app.repositories.machine_repository import MachineRepository
 from app.schemas.auth import UserResponse
 from app.schemas.settings import BootstrapSetting, ExecutionModeSetting, SettingsResponse, ToggleSetting
@@ -19,7 +19,7 @@ router = APIRouter()
 @router.get("", response_model=SettingsResponse)
 def get_settings(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(get_current_user)],
+    _: Annotated[UserResponse, Depends(require_viewer)],
 ) -> SettingsResponse:
     settings_service = SettingsService(db)
     machine_groups = MachineRepository(db).list_groups()
@@ -66,7 +66,7 @@ def get_settings(
 def update_execution_mode(
     payload: LinuxExecutionModeUpdate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[UserResponse, Depends(get_current_user)],
+    current_user: Annotated[UserResponse, Depends(require_admin)],
 ) -> ExecutionModeSetting:
     settings_service = SettingsService(db)
     if payload.machine_group:
@@ -161,7 +161,7 @@ def update_execution_mode(
 def update_bootstrap_token(
     payload: BootstrapTokenUpdate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[UserResponse, Depends(get_current_user)],
+    current_user: Annotated[UserResponse, Depends(require_admin)],
 ) -> BootstrapSetting:
     settings_service = SettingsService(db)
     previous_token = settings_service.get_agent_bootstrap_token()
@@ -203,7 +203,7 @@ def update_bootstrap_token(
 @router.get("/events/export.csv")
 def export_operational_events_csv(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(get_current_user)],
+    _: Annotated[UserResponse, Depends(require_viewer)],
 ) -> Response:
     settings_service = SettingsService(db)
     output = StringIO()

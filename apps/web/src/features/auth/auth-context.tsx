@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { fetchCurrentUser, loginRequest } from "@/features/auth/api";
+import { changePassword as changePasswordRequest, fetchCurrentUser, loginRequest } from "@/features/auth/api";
 import type { User } from "@/features/auth/types";
 
 const AUTH_TOKEN_KEY = "patch-manager-token";
@@ -16,6 +16,7 @@ type AuthContextValue = {
   user: User | null;
   isLoading: boolean;
   login: (username: string, password: string) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   logout: () => void;
 };
 
@@ -85,6 +86,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const currentUser = await fetchCurrentUser(response.access_token);
         setUser(currentUser);
         setIsLoading(false);
+      },
+      async changePassword(currentPassword: string, newPassword: string) {
+        const updatedUser = await changePasswordRequest({
+          current_password: currentPassword,
+          new_password: newPassword,
+        });
+        setUser(updatedUser);
       },
       logout() {
         setStoredToken(null);

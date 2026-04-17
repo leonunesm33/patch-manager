@@ -13,6 +13,7 @@ class MachineModel(Base):
     name: Mapped[str] = mapped_column(String(120), index=True)
     ip: Mapped[str] = mapped_column(String(45))
     platform: Mapped[str] = mapped_column(String(50))
+    environment: Mapped[str] = mapped_column(String(32), default="production", nullable=False)
     group: Mapped[str] = mapped_column("group_name", String(120), index=True)
     status: Mapped[str] = mapped_column(String(30))
     pending_patches: Mapped[int] = mapped_column(Integer, default=0)

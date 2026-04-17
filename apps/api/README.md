@@ -37,3 +37,4 @@ Credenciais iniciais apos o seed:
 
 - usuario: `admin`
 - senha: `admin123`
+- a senha inicial deve ser trocada no primeiro login quando `SEED_ADMIN_FORCE_PASSWORD_CHANGE=true`

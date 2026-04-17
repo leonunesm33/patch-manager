@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_db, require_viewer
 from app.repositories.execution_log_repository import ExecutionLogRepository
 from app.schemas.auth import UserResponse
 from app.schemas.report import ReportItem
@@ -14,7 +14,7 @@ router = APIRouter()
 @router.get("", response_model=list[ReportItem])
 def list_reports(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(get_current_user)],
+    _: Annotated[UserResponse, Depends(require_viewer)],
 ) -> list[ReportItem]:
     repository = ExecutionLogRepository(db)
     logs = repository.list_recent()

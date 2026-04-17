@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_db, require_operator, require_viewer
 from app.models.schedule import ScheduleModel
 from app.repositories.schedule_repository import ScheduleRepository
 from app.schemas.auth import UserResponse
@@ -34,7 +34,7 @@ MOCK_SCHEDULES = [
 @router.get("", response_model=list[ScheduleItem])
 def list_schedules(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(get_current_user)],
+    _: Annotated[UserResponse, Depends(require_viewer)],
 ) -> list[ScheduleItem]:
     try:
         repository = ScheduleRepository(db)
@@ -51,7 +51,7 @@ def list_schedules(
 def create_schedule(
     payload: ScheduleCreate,
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(get_current_user)],
+    _: Annotated[UserResponse, Depends(require_operator)],
 ) -> ScheduleItem:
     repository = ScheduleRepository(db)
     schedule = repository.add(
@@ -71,7 +71,7 @@ def update_schedule(
     schedule_id: str,
     payload: ScheduleCreate,
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(get_current_user)],
+    _: Annotated[UserResponse, Depends(require_operator)],
 ) -> ScheduleItem:
     repository = ScheduleRepository(db)
     schedule = repository.get_by_id(schedule_id)
@@ -91,7 +91,7 @@ def update_schedule(
 def delete_schedule(
     schedule_id: str,
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(get_current_user)],
+    _: Annotated[UserResponse, Depends(require_operator)],
 ) -> Response:
     repository = ScheduleRepository(db)
     schedule = repository.get_by_id(schedule_id)

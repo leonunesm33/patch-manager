@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     seed_admin_username: str = "admin"
     seed_admin_password: str = "admin123"
     seed_admin_full_name: str = "Patch Manager Admin"
+    seed_admin_role: str = "admin"
+    seed_admin_force_password_change: bool = True
     cors_allow_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     cors_allow_origin_regex: str = r"https?://(localhost|127\.0\.0\.1)(:\d+)?$"
     scheduler_autostart: bool = True

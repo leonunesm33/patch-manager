@@ -9,7 +9,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_agent_identity, get_bootstrap_token, get_current_user, get_db
+from app.api.deps import (
+    get_agent_identity,
+    get_bootstrap_token,
+    get_current_user,
+    get_db,
+    require_operator,
+    require_viewer,
+)
 from app.core.security import hash_password
 from app.models.agent_credential import AgentCredentialModel
 from app.models.agent_command import AgentCommandModel
@@ -766,7 +773,7 @@ def list_stopped_agents(
 def requeue_revoked_agent(
     agent_id: str,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[UserResponse, Depends(get_current_user)],
+    current_user: Annotated[UserResponse, Depends(require_operator)],
 ) -> PendingAgentEnrollmentResponse:
     credential_repository = AgentCredentialRepository(db)
     enrollment_repository = AgentEnrollmentRepository(db)
@@ -793,7 +800,7 @@ def requeue_revoked_agent(
 def revoke_connected_agent(
     agent_id: str,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[UserResponse, Depends(get_current_user)],
+    current_user: Annotated[UserResponse, Depends(require_operator)],
 ) -> dict[str, str]:
     credential_repository = AgentCredentialRepository(db)
     settings_service = SettingsService(db)
@@ -816,7 +823,7 @@ def revoke_connected_agent(
 def reintegrate_connected_agent(
     agent_id: str,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[UserResponse, Depends(get_current_user)],
+    current_user: Annotated[UserResponse, Depends(require_operator)],
 ) -> PendingAgentEnrollmentResponse:
     connected_agent = agent_registry_service.get_connected(agent_id)
     if connected_agent is None:
@@ -885,7 +892,7 @@ def request_connected_agent_reboot(
 @router.get("/commands/recent", response_model=list[AgentCommandHistoryItem])
 def list_recent_agent_commands(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(get_current_user)],
+    _: Annotated[UserResponse, Depends(require_viewer)],
 ) -> list[AgentCommandHistoryItem]:
     repository = AgentCommandRepository(db)
     return [
@@ -907,7 +914,7 @@ def list_recent_agent_commands(
 @router.get("/inventory-snapshots", response_model=list[AgentInventorySnapshotItem])
 def list_agent_inventory_snapshots(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(get_current_user)],
+    _: Annotated[UserResponse, Depends(require_viewer)],
 ) -> list[AgentInventorySnapshotItem]:
     repository = AgentInventorySnapshotRepository(db)
     return [AgentInventorySnapshotItem.model_validate(item) for item in repository.list_recent()]
@@ -917,7 +924,7 @@ def list_agent_inventory_snapshots(
 def get_agent_inventory_details(
     agent_id: str,
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(get_current_user)],
+    _: Annotated[UserResponse, Depends(require_viewer)],
 ) -> AgentInventoryDetailResponse:
     snapshot_repository = AgentInventorySnapshotRepository(db)
     item_repository = AgentInventoryItemRepository(db)
@@ -950,7 +957,7 @@ def get_agent_inventory_details(
 @router.get("/enrollments/pending", response_model=list[PendingAgentEnrollmentResponse])
 def list_pending_enrollments(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(get_current_user)],
+    _: Annotated[UserResponse, Depends(require_viewer)],
 ) -> list[PendingAgentEnrollmentResponse]:
     repository = AgentEnrollmentRepository(db)
     return [PendingAgentEnrollmentResponse.model_validate(item) for item in repository.list_pending()]
@@ -959,7 +966,7 @@ def list_pending_enrollments(
 @router.get("/enrollments/rejected", response_model=list[RejectedAgentEnrollmentResponse])
 def list_rejected_enrollments(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(get_current_user)],
+    _: Annotated[UserResponse, Depends(require_viewer)],
 ) -> list[RejectedAgentEnrollmentResponse]:
     repository = AgentEnrollmentRepository(db)
     return [RejectedAgentEnrollmentResponse.model_validate(item) for item in repository.list_rejected()]
@@ -969,7 +976,7 @@ def list_rejected_enrollments(
 def approve_pending_enrollment(
     agent_id: str,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[UserResponse, Depends(get_current_user)],
+    current_user: Annotated[UserResponse, Depends(require_operator)],
 ) -> PendingAgentEnrollmentResponse:
     enrollment_repository = AgentEnrollmentRepository(db)
     credential_repository = AgentCredentialRepository(db)
@@ -1012,7 +1019,7 @@ def approve_pending_enrollment(
 def reject_pending_enrollment(
     agent_id: str,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[UserResponse, Depends(get_current_user)],
+    current_user: Annotated[UserResponse, Depends(require_operator)],
 ) -> PendingAgentEnrollmentResponse:
     enrollment_repository = AgentEnrollmentRepository(db)
     settings_service = SettingsService(db)
@@ -1033,7 +1040,7 @@ def reject_pending_enrollment(
 def reopen_rejected_enrollment(
     agent_id: str,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[UserResponse, Depends(get_current_user)],
+    current_user: Annotated[UserResponse, Depends(require_operator)],
 ) -> PendingAgentEnrollmentResponse:
     enrollment_repository = AgentEnrollmentRepository(db)
     settings_service = SettingsService(db)
@@ -1198,6 +1205,7 @@ def submit_agent_inventory(
                 name=payload.hostname,
                 ip=payload.primary_ip,
                 platform="Ubuntu" if payload.platform.lower() == "linux" else payload.platform.title(),
+                environment="production",
                 group="Agent Managed",
                 status="online",
                 pending_patches=payload.upgradable_packages,
@@ -1208,6 +1216,7 @@ def submit_agent_inventory(
     else:
         machine.ip = payload.primary_ip
         machine.platform = "Ubuntu" if payload.platform.lower() == "linux" else payload.platform.title()
+        machine.environment = machine.environment or "production"
         machine.group = "Agent Managed"
         machine.status = "online"
         machine.pending_patches = payload.upgradable_packages

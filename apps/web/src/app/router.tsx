@@ -1,5 +1,6 @@
 import { createBrowserRouter } from "react-router-dom";
 import { AppShell } from "@/components/layout/app-shell";
+import { ChangePasswordPage } from "@/features/auth/pages/change-password-page";
 import { LoginPage } from "@/features/auth/pages/login-page";
 import { RequireAuth } from "@/features/auth/require-auth";
 import { DashboardPage } from "@/features/dashboard/pages/dashboard-page";
@@ -15,6 +16,10 @@ export const router = createBrowserRouter([
   {
     path: "/login",
     element: <LoginPage />,
+  },
+  {
+    path: "/change-password",
+    element: <ChangePasswordPage />,
   },
   {
     element: <RequireAuth />,

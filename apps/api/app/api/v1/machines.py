@@ -7,7 +7,7 @@ from fastapi import Response, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_db, require_operator, require_viewer
 from app.models.machine import MachineModel
 from app.repositories.agent_credential_repository import AgentCredentialRepository
 from app.repositories.agent_command_repository import AgentCommandRepository
@@ -38,6 +38,7 @@ MOCK_MACHINES = [
         name="SRV-WEB-01",
         ip="10.0.1.21",
         platform="Windows",
+        environment="production",
         group="Web Servers",
         status="online",
         pending_patches=4,
@@ -49,6 +50,7 @@ MOCK_MACHINES = [
         name="ubuntu-prod-03",
         ip="10.1.4.33",
         platform="Ubuntu",
+        environment="production",
         group="Linux Production",
         status="online",
         pending_patches=3,
@@ -60,6 +62,7 @@ MOCK_MACHINES = [
         name="SRV-DB-02",
         ip="10.0.2.11",
         platform="Windows",
+        environment="production",
         group="Database",
         status="warning",
         pending_patches=7,
@@ -72,7 +75,7 @@ MOCK_MACHINES = [
 @router.get("", response_model=list[Machine])
 def list_machines(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(get_current_user)],
+    _: Annotated[UserResponse, Depends(require_viewer)],
 ) -> list[Machine]:
     try:
         repository = MachineRepository(db)
@@ -121,7 +124,7 @@ def list_machines(
 def get_machine(
     machine_id: str,
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(get_current_user)],
+    _: Annotated[UserResponse, Depends(require_viewer)],
 ) -> Machine:
     try:
         repository = MachineRepository(db)
@@ -142,7 +145,7 @@ def get_machine(
 def get_machine_operational_details(
     machine_id: str,
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(get_current_user)],
+    _: Annotated[UserResponse, Depends(require_viewer)],
 ) -> MachineOperationalDetails:
     machine_repository = MachineRepository(db)
     snapshot_repository = AgentInventorySnapshotRepository(db)
@@ -244,7 +247,7 @@ def get_machine_operational_details(
 def create_machine(
     payload: MachineCreate,
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(get_current_user)],
+    _: Annotated[UserResponse, Depends(require_operator)],
 ) -> Machine:
     repository = MachineRepository(db)
     machine = repository.add(
@@ -253,6 +256,7 @@ def create_machine(
             name=payload.name,
             ip=payload.ip,
             platform=payload.platform,
+            environment=payload.environment,
             group=payload.group,
             status=payload.status,
             pending_patches=payload.pending_patches,
@@ -268,7 +272,7 @@ def update_machine(
     machine_id: str,
     payload: MachineCreate,
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(get_current_user)],
+    _: Annotated[UserResponse, Depends(require_operator)],
 ) -> Machine:
     repository = MachineRepository(db)
     machine = repository.get_by_id(machine_id)
@@ -278,6 +282,7 @@ def update_machine(
     machine.name = payload.name
     machine.ip = payload.ip
     machine.platform = payload.platform
+    machine.environment = payload.environment
     machine.group = payload.group
     machine.status = payload.status
     machine.pending_patches = payload.pending_patches
@@ -292,7 +297,7 @@ def update_machine(
 def delete_machine(
     machine_id: str,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[UserResponse, Depends(get_current_user)],
+    current_user: Annotated[UserResponse, Depends(require_operator)],
 ) -> Response:
     repository = MachineRepository(db)
     machine = repository.get_by_id(machine_id)

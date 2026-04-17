@@ -4,7 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_db, require_viewer
 from app.repositories.execution_log_repository import ExecutionLogRepository
 from app.repositories.agent_command_repository import AgentCommandRepository
 from app.repositories.agent_inventory_snapshot_repository import AgentInventorySnapshotRepository
@@ -29,7 +29,7 @@ router = APIRouter()
 @router.get("", response_model=DashboardResponse)
 def get_dashboard(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(get_current_user)],
+    _: Annotated[UserResponse, Depends(require_viewer)],
 ) -> DashboardResponse:
     machine_repository = MachineRepository(db)
     patch_repository = PatchRepository(db)

@@ -57,6 +57,7 @@ export function MachinesPage() {
     name: "",
     ip: "",
     platform: "Windows",
+    environment: "production",
     group: "",
     status: "online",
     pending_patches: 0,
@@ -115,6 +116,7 @@ export function MachinesPage() {
         name: "",
         ip: "",
         platform: "Windows",
+        environment: "production",
         group: "",
         status: "online",
         pending_patches: 0,
@@ -140,6 +142,7 @@ export function MachinesPage() {
       name: machine.name,
       ip: machine.ip,
       platform: machine.platform,
+      environment: machine.environment,
       group: machine.group,
       status: machine.status,
       pending_patches: machine.pending_patches,
@@ -159,6 +162,7 @@ export function MachinesPage() {
           name: "",
           ip: "",
           platform: "Windows",
+          environment: "production",
           group: "",
           status: "online",
           pending_patches: 0,
@@ -236,6 +240,7 @@ export function MachinesPage() {
       machine.name.toLowerCase().includes(normalizedSearch) ||
       machine.ip.toLowerCase().includes(normalizedSearch) ||
       machine.group.toLowerCase().includes(normalizedSearch) ||
+      machine.environment.toLowerCase().includes(normalizedSearch) ||
       machine.platform.toLowerCase().includes(normalizedSearch);
     const matchesPlatform =
       platformFilter === "all" || machine.platform.toLowerCase() === platformFilter.toLowerCase();
@@ -430,6 +435,7 @@ export function MachinesPage() {
               <th>Host</th>
               <th>IP</th>
               <th>Plataforma</th>
+              <th>Ambiente</th>
               <th>Grupo</th>
               <th>Patches pendentes</th>
               <th>Pos-patch</th>
@@ -465,6 +471,7 @@ export function MachinesPage() {
                 <td style={{ fontWeight: 700 }}>{machine.name}</td>
                 <td className="code">{machine.ip}</td>
                 <td>{machine.platform}</td>
+                <td>{machine.environment}</td>
                 <td>{machine.group}</td>
                 <td>{machine.pending_patches}</td>
                 <td>
@@ -582,6 +589,20 @@ export function MachinesPage() {
             </select>
           </label>
           <label>
+            <span className="field-label">Ambiente</span>
+            <select
+              className="select"
+              value={form.environment}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, environment: event.target.value }))
+              }
+            >
+              <option value="production">production</option>
+              <option value="homolog">homolog</option>
+              <option value="development">development</option>
+            </select>
+          </label>
+          <label>
             <span className="field-label">Grupo</span>
             <input
               className="input"
@@ -658,6 +679,7 @@ export function MachinesPage() {
                     name: "",
                     ip: "",
                     platform: "Windows",
+                    environment: "production",
                     group: "",
                     status: "online",
                     pending_patches: 0,

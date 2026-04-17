@@ -14,6 +14,9 @@ coverage/
 .codex/
 *.tsbuildinfo
 *:Zone.Identifier
+infra/certs/
+infra/env/api.env
+infra/compose/.env
 Patch-manager-estrutura-completa.docx
 Patch-manager-estrutura-completa.pdf
 patch-manager-inicial.html

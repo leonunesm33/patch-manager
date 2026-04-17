@@ -16,3 +16,9 @@ class UserRepository:
         self.session.add(user)
         self.session.flush()
         return user
+
+    def update(self, user: UserModel) -> UserModel:
+        self.session.add(user)
+        self.session.commit()
+        self.session.refresh(user)
+        return user

@@ -12,6 +12,7 @@ class Machine(BaseModel):
     name: str
     ip: str
     platform: str
+    environment: str
     group: str
     status: str
     pending_patches: int
@@ -27,6 +28,7 @@ class MachineCreate(BaseModel):
     name: str
     ip: str
     platform: str
+    environment: str = "production"
     group: str
     status: str = "online"
     pending_patches: int = 0

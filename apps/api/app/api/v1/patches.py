@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_db, require_operator, require_viewer
 from app.models.patch import PatchModel
 from app.repositories.patch_repository import PatchRepository
 from app.schemas.auth import UserResponse
@@ -36,7 +36,7 @@ MOCK_PATCHES = [
 @router.get("", response_model=list[PatchApproval])
 def list_patch_approvals(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(get_current_user)],
+    _: Annotated[UserResponse, Depends(require_viewer)],
 ) -> list[PatchApproval]:
     try:
         repository = PatchRepository(db)
@@ -67,7 +67,7 @@ def list_patch_approvals(
 def create_patch(
     payload: PatchCreate,
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(get_current_user)],
+    _: Annotated[UserResponse, Depends(require_operator)],
 ) -> PatchApproval:
     repository = PatchRepository(db)
     if repository.get_by_id(payload.id) is not None:
@@ -93,7 +93,7 @@ def update_patch(
     patch_id: str,
     payload: PatchCreate,
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(get_current_user)],
+    _: Annotated[UserResponse, Depends(require_operator)],
 ) -> PatchApproval:
     repository = PatchRepository(db)
     patch = repository.get_by_id(patch_id)
@@ -117,7 +117,7 @@ def update_patch(
 def delete_patch(
     patch_id: str,
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(get_current_user)],
+    _: Annotated[UserResponse, Depends(require_operator)],
 ) -> Response:
     repository = PatchRepository(db)
     patch = repository.get_by_id(patch_id)
@@ -133,7 +133,7 @@ def delete_patch(
 def approve_patch(
     patch_id: str,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[UserResponse, Depends(get_current_user)],
+    current_user: Annotated[UserResponse, Depends(require_operator)],
 ) -> PatchApproval:
     repository = PatchRepository(db)
     patch = repository.get_by_id(patch_id)
@@ -152,7 +152,7 @@ def approve_patch(
 def reject_patch(
     patch_id: str,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[UserResponse, Depends(get_current_user)],
+    current_user: Annotated[UserResponse, Depends(require_operator)],
 ) -> PatchApproval:
     repository = PatchRepository(db)
     patch = repository.get_by_id(patch_id)

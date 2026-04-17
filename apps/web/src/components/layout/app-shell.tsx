@@ -55,7 +55,7 @@ export function AppShell() {
             <div>
               <div style={{ fontWeight: 700 }}>{user?.full_name ?? "Usuario autenticado"}</div>
               <div className="muted" style={{ marginTop: 4 }}>
-                {user?.username ?? "sem usuario"} conectado ao Patch Manager
+                {user?.username ?? "sem usuario"} conectado ao Patch Manager como {user?.role ?? "viewer"}
               </div>
             </div>
             <button className="btn" onClick={logout}>

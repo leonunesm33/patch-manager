@@ -3,6 +3,7 @@ export type Machine = {
   name: string;
   ip: string;
   platform: string;
+  environment: string;
   group: string;
   status: "online" | "warning" | "offline";
   pending_patches: number;
@@ -62,6 +63,7 @@ export type MachineCreate = {
   name: string;
   ip: string;
   platform: string;
+  environment: string;
   group: string;
   status: "online" | "warning" | "offline";
   pending_patches: number;
