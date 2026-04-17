@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from app.schemas.agent import AgentInventoryDetailResponse
+
 
 class Machine(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -29,3 +31,47 @@ class MachineCreate(BaseModel):
     status: str = "online"
     pending_patches: int = 0
     risk: str = "important"
+
+
+class MachineJobSummary(BaseModel):
+    id: str
+    schedule_name: str
+    patch_id: str
+    platform: str
+    severity: str
+    status: str
+    claimed_by_agent: str | None = None
+    error_message: str | None = None
+    created_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
+class MachineExecutionSummary(BaseModel):
+    id: str
+    schedule_name: str
+    patch_id: str
+    platform: str
+    severity: str
+    result: str
+    duration_seconds: int
+    executed_at: datetime
+
+
+class MachineCommandSummary(BaseModel):
+    id: str
+    command_type: str
+    status: str
+    requested_by: str
+    message: str | None = None
+    created_at: datetime
+    finished_at: datetime | None = None
+
+
+class MachineOperationalDetails(BaseModel):
+    machine: Machine
+    agent_id: str | None = None
+    inventory: AgentInventoryDetailResponse | None = None
+    recent_jobs: list[MachineJobSummary] = []
+    recent_executions: list[MachineExecutionSummary] = []
+    recent_commands: list[MachineCommandSummary] = []

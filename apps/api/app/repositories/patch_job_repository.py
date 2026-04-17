@@ -12,6 +12,15 @@ class PatchJobRepository:
         statement = select(PatchJobModel).order_by(PatchJobModel.created_at.desc()).limit(limit)
         return list(self.session.scalars(statement))
 
+    def list_recent_for_machine(self, machine_id: str, limit: int = 20) -> list[PatchJobModel]:
+        statement = (
+            select(PatchJobModel)
+            .where(PatchJobModel.machine_id == machine_id)
+            .order_by(PatchJobModel.created_at.desc())
+            .limit(limit)
+        )
+        return list(self.session.scalars(statement))
+
     def get_by_id(self, job_id: str) -> PatchJobModel | None:
         return self.session.get(PatchJobModel, job_id)
 

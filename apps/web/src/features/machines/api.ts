@@ -1,5 +1,5 @@
 import { http } from "@/lib/http";
-import type { Machine, MachineCreate } from "@/features/machines/types";
+import type { Machine, MachineCreate, MachineOperationalDetails } from "@/features/machines/types";
 
 export function fetchMachines() {
   return http<Machine[]>("/machines");
@@ -23,4 +23,8 @@ export function deleteMachine(machineId: string) {
   return http<void>(`/machines/${machineId}`, {
     method: "DELETE",
   });
+}
+
+export function fetchMachineOperationalDetails(machineId: string) {
+  return http<MachineOperationalDetails>(`/machines/${machineId}/operational-details`);
 }

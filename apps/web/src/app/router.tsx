@@ -3,6 +3,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { LoginPage } from "@/features/auth/pages/login-page";
 import { RequireAuth } from "@/features/auth/require-auth";
 import { DashboardPage } from "@/features/dashboard/pages/dashboard-page";
+import { MachineDetailPage } from "@/features/machines/pages/machine-detail-page";
 import { MachinesPage } from "@/features/machines/pages/machines-page";
 import { PatchApprovalsPage } from "@/features/patches/pages/patch-approvals-page";
 import { ReportsPage } from "@/features/reports/pages/reports-page";
@@ -24,6 +25,7 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <DashboardPage /> },
           { path: "machines", element: <MachinesPage /> },
+          { path: "machines/:machineId", element: <MachineDetailPage /> },
           { path: "patches", element: <PatchApprovalsPage /> },
           { path: "schedules", element: <SchedulesPage /> },
           { path: "operations", element: <OperationsPage /> },

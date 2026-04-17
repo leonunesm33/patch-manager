@@ -16,6 +16,15 @@ class ExecutionLogRepository:
         )
         return list(self.session.scalars(statement))
 
+    def list_recent_for_machine(self, machine_id: str, limit: int = 20) -> list[ExecutionLogModel]:
+        statement = (
+            select(ExecutionLogModel)
+            .where(ExecutionLogModel.machine_id == machine_id)
+            .order_by(ExecutionLogModel.executed_at.desc())
+            .limit(limit)
+        )
+        return list(self.session.scalars(statement))
+
     def add_many(self, logs: list[ExecutionLogModel]) -> list[ExecutionLogModel]:
         self.session.add_all(logs)
         self.session.commit()

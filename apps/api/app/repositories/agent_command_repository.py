@@ -21,6 +21,15 @@ class AgentCommandRepository:
         )
         return list(self.session.scalars(statement))
 
+    def list_recent_for_agent(self, agent_id: str, limit: int = 20) -> list[AgentCommandModel]:
+        statement = (
+            select(AgentCommandModel)
+            .where(AgentCommandModel.agent_id == agent_id)
+            .order_by(AgentCommandModel.created_at.desc())
+            .limit(limit)
+        )
+        return list(self.session.scalars(statement))
+
     def list_pending_for_agent(self, agent_id: str) -> list[AgentCommandModel]:
         statement = (
             select(AgentCommandModel)
