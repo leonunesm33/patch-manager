@@ -12,6 +12,7 @@ class PatchModel(Base):
     id: Mapped[str] = mapped_column(String(120), primary_key=True)
     target: Mapped[str] = mapped_column(String(120), index=True)
     severity: Mapped[str] = mapped_column(String(30), index=True)
+    category: Mapped[str] = mapped_column(String(40), default="security", index=True)
     machines: Mapped[int] = mapped_column(Integer, default=0)
     release_date: Mapped[date] = mapped_column(Date)
     approval_status: Mapped[str] = mapped_column(String(30), default="pending", index=True)

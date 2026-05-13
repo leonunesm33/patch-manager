@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   approvePatch,
   createPatch,
@@ -11,7 +12,7 @@ import { ActionMenu } from "@/components/common/action-menu";
 import { ConfirmModal } from "@/components/common/confirm-modal";
 import { StatusBadge } from "@/components/common/status-badge";
 import { formatDateTimeSaoPaulo } from "@/lib/datetime";
-import type { PatchApproval, PatchCreate } from "@/features/patches/types";
+import type { PatchApproval, PatchCategory, PatchCreate, PatchSeverity } from "@/features/patches/types";
 
 function getStatusVariant(status: PatchApproval["approval_status"]) {
   if (status === "approved") return "ok";
@@ -19,7 +20,39 @@ function getStatusVariant(status: PatchApproval["approval_status"]) {
   return "warn";
 }
 
+function getSeverityVariant(severity: string) {
+  if (severity === "critical") return "error";
+  if (severity === "high" || severity === "important") return "warn";
+  return "ok";
+}
+
+function getSeverityLabel(severity: string) {
+  const labels: Record<string, string> = {
+    low: "baixo",
+    medium: "medio",
+    high: "alto",
+    critical: "critico",
+    important: "alto",
+    optional: "baixo",
+  };
+  return labels[severity] ?? severity;
+}
+
+function getCategoryLabel(category: string) {
+  const labels: Record<string, string> = {
+    security: "seguranca",
+    bugfix: "bug",
+    feature: "funcional",
+    stability: "estabilidade",
+    other: "outros",
+  };
+  return labels[category] ?? category;
+}
+
 export function PatchApprovalsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const machineIdFilter = searchParams.get("machine_id") ?? "";
+  const approvalStatusFilter = searchParams.get("approval_status") ?? "";
   const [patches, setPatches] = useState<PatchApproval[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,38 +61,54 @@ export function PatchApprovalsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PatchApproval | null>(null);
+  const [showPatchForm, setShowPatchForm] = useState(false);
   const [form, setForm] = useState<PatchCreate>({
     id: "",
     target: "Windows Servers",
-    severity: "important",
+    severity: "high",
+    category: "security",
     machines: 1,
     release_date: new Date().toISOString().slice(0, 10),
   });
+  const hasSidePanel = showPatchForm || editingId !== null;
+
+  function resetPatchForm() {
+    setEditingId(null);
+    setShowPatchForm(false);
+    setActionError(null);
+    setForm({
+      id: "",
+      target: "Windows Servers",
+      severity: "high",
+      category: "security",
+      machines: 1,
+      release_date: new Date().toISOString().slice(0, 10),
+    });
+  }
+
+  async function loadPatches() {
+    setLoading(true);
+    try {
+      const response = await fetchPatchApprovals({
+        machineId: machineIdFilter || undefined,
+        approvalStatus: approvalStatusFilter || undefined,
+      });
+      setPatches(response);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao carregar aprovacoes.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    let active = true;
+    void loadPatches();
+  }, [machineIdFilter, approvalStatusFilter]);
 
-    async function load() {
-      try {
-        const response = await fetchPatchApprovals();
-        if (!active) return;
-        setPatches(response);
-      } catch (err) {
-        if (!active) return;
-        setError(err instanceof Error ? err.message : "Falha ao carregar aprovacoes.");
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void load();
-
-    return () => {
-      active = false;
-    };
-  }, []);
+  function clearFilters() {
+    setSearchParams({});
+  }
 
   async function handlePatchDecision(
     patchId: string,
@@ -72,7 +121,9 @@ export function PatchApprovalsPage() {
       const updatedPatch =
         decision === "approved" ? await approvePatch(patchId) : await rejectPatch(patchId);
       setPatches((current) =>
-        current.map((patch) => (patch.id === updatedPatch.id ? updatedPatch : patch)),
+        current
+          .map((patch) => (patch.id === updatedPatch.id ? updatedPatch : patch))
+          .filter((patch) => !approvalStatusFilter || patch.approval_status === approvalStatusFilter),
       );
     } catch (err) {
       setActionError(
@@ -99,13 +150,8 @@ export function PatchApprovalsPage() {
         ),
       );
       setEditingId(null);
-      setForm({
-        id: "",
-        target: "Windows Servers",
-        severity: "important",
-        machines: 1,
-        release_date: new Date().toISOString().slice(0, 10),
-      });
+      setShowPatchForm(false);
+      resetPatchForm();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Falha ao salvar o patch.");
     } finally {
@@ -115,11 +161,13 @@ export function PatchApprovalsPage() {
 
   function handleEditPatch(patch: PatchApproval) {
     setEditingId(patch.id);
+    setShowPatchForm(true);
     setActionError(null);
     setForm({
       id: patch.id,
       target: patch.target,
       severity: patch.severity,
+      category: patch.category,
       machines: patch.machines,
       release_date: patch.release_date,
     });
@@ -131,13 +179,8 @@ export function PatchApprovalsPage() {
       setPatches((current) => current.filter((item) => item.id !== patch.id));
       if (editingId === patch.id) {
         setEditingId(null);
-        setForm({
-          id: "",
-          target: "Windows Servers",
-          severity: "important",
-          machines: 1,
-          release_date: new Date().toISOString().slice(0, 10),
-        });
+        setShowPatchForm(false);
+        resetPatchForm();
       }
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Falha ao excluir o patch.");
@@ -147,7 +190,7 @@ export function PatchApprovalsPage() {
   }
 
   return (
-    <div className="split-grid">
+    <div className={hasSidePanel ? "split-grid" : "single-panel-grid"}>
       <ConfirmModal
         open={pendingDelete !== null}
         title="Excluir patch"
@@ -167,15 +210,41 @@ export function PatchApprovalsPage() {
       <section className="panel section">
         <div className="section-header">
           <h2 className="section-title">Fila de aprovacoes</h2>
-          <span className="muted">
-            {loading
-              ? "Carregando da API..."
-              : `${patches.filter((patch) => patch.approval_status === "pending").length} itens pendentes`}
-          </span>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <span className="muted">
+              {loading
+                ? "Carregando da API..."
+                : `${patches.filter((patch) => patch.approval_status === "pending").length} pendentes`}
+            </span>
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                resetPatchForm();
+                setShowPatchForm(true);
+              }}
+              type="button"
+            >
+              Novo patch
+            </button>
+          </div>
         </div>
+        {(machineIdFilter || approvalStatusFilter) ? (
+          <div className="list-item subtle-filter-panel" style={{ marginBottom: 16 }}>
+            <div>
+              <div style={{ fontWeight: 700 }}>Filtro ativo</div>
+              <div className="muted" style={{ marginTop: 4 }}>
+                {machineIdFilter ? `Maquina: ${machineIdFilter}` : "Todas as maquinas"}
+                {approvalStatusFilter ? ` - status: ${approvalStatusFilter}` : ""}
+              </div>
+            </div>
+            <button className="btn" onClick={clearFilters} type="button">
+              Limpar filtro
+            </button>
+          </div>
+        ) : null}
         {error ? (
           <p className="muted" style={{ marginTop: 0, marginBottom: 16 }}>
-            {error}. Verifique se a API esta ativa em `http://localhost:8000`.
+            {error}. Verifique se a API esta ativa.
           </p>
         ) : null}
         {actionError ? (
@@ -187,10 +256,10 @@ export function PatchApprovalsPage() {
           <thead>
             <tr>
               <th>Patch</th>
-              <th>Escopo</th>
-              <th>Severidade</th>
+              <th>Categoria</th>
+              <th>Criticidade</th>
               <th>Status</th>
-              <th>Maquinas</th>
+              <th>Maquinas afetadas</th>
               <th>Lancamento</th>
               <th>Revisao</th>
               <th>Acoes</th>
@@ -200,15 +269,24 @@ export function PatchApprovalsPage() {
             {!loading && patches.length === 0 ? (
               <tr>
                 <td colSpan={8} className="muted">
-                  Nenhum patch aguardando aprovacao.
+                  Nenhum patch encontrado para o filtro atual.
                 </td>
               </tr>
             ) : null}
             {patches.map((patch) => (
               <tr key={patch.id}>
-                <td className="code">{patch.id}</td>
-                <td>{patch.target}</td>
-                <td>{patch.severity}</td>
+                <td>
+                  <div className="code">{patch.id}</div>
+                  <div className="muted" style={{ marginTop: 4 }}>
+                    {patch.target}
+                  </div>
+                </td>
+                <td>{getCategoryLabel(patch.category)}</td>
+                <td>
+                  <StatusBadge variant={getSeverityVariant(patch.severity)}>
+                    {getSeverityLabel(patch.severity)}
+                  </StatusBadge>
+                </td>
                 <td>
                   <StatusBadge variant={getStatusVariant(patch.approval_status)}>
                     {patch.approval_status}
@@ -254,6 +332,7 @@ export function PatchApprovalsPage() {
         </table>
       </section>
 
+      {showPatchForm || editingId ? (
       <section className="panel section">
         <div className="section-header">
           <h2 className="section-title">Registrar patch</h2>
@@ -282,28 +361,49 @@ export function PatchApprovalsPage() {
             >
               <option>Windows Servers</option>
               <option>Ubuntu Production</option>
+              <option>Linux Production</option>
               <option>Finance Workstations</option>
             </select>
           </label>
           <label>
-            <span className="field-label">Severidade</span>
+            <span className="field-label">Criticidade</span>
             <select
               className="select"
               value={form.severity}
               onChange={(event) =>
                 setForm((current) => ({
                   ...current,
-                  severity: event.target.value as PatchCreate["severity"],
+                  severity: event.target.value as PatchSeverity,
                 }))
               }
             >
-              <option value="critical">critical</option>
-              <option value="important">important</option>
-              <option value="optional">optional</option>
+              <option value="low">baixo</option>
+              <option value="medium">medio</option>
+              <option value="high">alto</option>
+              <option value="critical">critico</option>
             </select>
           </label>
           <label>
-            <span className="field-label">Maquinas afetadas</span>
+            <span className="field-label">Categoria</span>
+            <select
+              className="select"
+              value={form.category}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  category: event.target.value as PatchCategory,
+                }))
+              }
+            >
+              <option value="security">seguranca</option>
+              <option value="bugfix">bug</option>
+              <option value="stability">estabilidade</option>
+              <option value="feature">funcional</option>
+              <option value="other">outros</option>
+            </select>
+          </label>
+          <label>
+            <span className="field-label">Maquinas afetadas estimadas</span>
             <input
               className="input"
               min="1"
@@ -337,28 +437,13 @@ export function PatchApprovalsPage() {
             <button className="btn btn-primary" disabled={isSubmitting} type="submit">
               {isSubmitting ? "Salvando..." : editingId ? "Salvar alteracoes" : "Registrar patch"}
             </button>
-            {editingId ? (
-              <button
-                className="btn"
-                onClick={() => {
-                  setEditingId(null);
-                  setActionError(null);
-                  setForm({
-                    id: "",
-                    target: "Windows Servers",
-                    severity: "important",
-                    machines: 1,
-                    release_date: new Date().toISOString().slice(0, 10),
-                  });
-                }}
-                type="button"
-              >
-                Cancelar
-              </button>
-            ) : null}
+            <button className="btn" onClick={resetPatchForm} type="button">
+              Fechar
+            </button>
           </div>
         </form>
       </section>
+      ) : null}
     </div>
   );
 }

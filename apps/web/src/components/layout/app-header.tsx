@@ -10,11 +10,6 @@ export function AppHeader({ title, subtitle }: AppHeaderProps) {
         <div className="topbar-title">{title}</div>
         <div className="topbar-subtitle">{subtitle}</div>
       </div>
-
-      <div className="topbar-actions">
-        <button className="btn">Exportar</button>
-        <button className="btn btn-primary">Nova janela</button>
-      </div>
     </header>
   );
 }

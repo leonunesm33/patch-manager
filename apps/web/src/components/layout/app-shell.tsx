@@ -1,7 +1,6 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
-import { useAuth } from "@/features/auth/auth-context";
 
 const pageMeta: Record<string, { title: string; subtitle: string }> = {
   "/": {
@@ -32,7 +31,6 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
 
 export function AppShell() {
   const location = useLocation();
-  const { user, logout } = useAuth();
   const meta = pageMeta[location.pathname] ?? pageMeta["/"];
 
   return (
@@ -41,27 +39,6 @@ export function AppShell() {
       <main className="main-panel">
         <AppHeader title={meta.title} subtitle={meta.subtitle} />
         <div className="page-body">
-          <section
-            className="panel section"
-            style={{
-              marginBottom: 20,
-              paddingTop: 14,
-              paddingBottom: 14,
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 700 }}>{user?.full_name ?? "Usuario autenticado"}</div>
-              <div className="muted" style={{ marginTop: 4 }}>
-                {user?.username ?? "sem usuario"} conectado ao Patch Manager como {user?.role ?? "viewer"}
-              </div>
-            </div>
-            <button className="btn" onClick={logout}>
-              Sair
-            </button>
-          </section>
           <Outlet />
         </div>
       </main>

@@ -91,25 +91,30 @@ export function DashboardPage() {
   const distributionLabel = data
     ? `${data.platform_distribution.windows_servers} / ${data.platform_distribution.windows_workstations} / ${data.platform_distribution.linux_servers}`
     : "0 / 0 / 0";
+  const systemStatusItems = [
+    {
+      label: "API",
+      value: loading ? "carregando" : error ? "indisponivel" : "conectada",
+      variant: loading ? "warn" : error ? "error" : "ok",
+    },
+    {
+      label: "Banco de dados",
+      value: loading ? "validando" : error ? "sem resposta" : "operacional",
+      variant: loading ? "warn" : error ? "error" : "ok",
+    },
+  ] as const;
 
   return (
     <div>
       <section className="hero">
-        <h1 className="hero-title">Centro de operacao de atualizacoes</h1>
-        <p className="hero-copy">
-          O painel agora consolida autenticacao, persistencia, ciclo de vida dos agentes
-          e execucao operacional para Linux e Windows em um unico fluxo de homologacao.
-        </p>
+        <div className="hero-title">Status do sistema</div>
         <div className="status-strip">
-          <span>
-            <strong>API:</strong> {loading ? "carregando" : error ? "indisponivel" : "conectada"}
-          </span>
-          <span>
-            <strong>Banco:</strong> PostgreSQL previsto
-          </span>
-          <span>
-            <strong>Agentes:</strong> estrutura preparada
-          </span>
+          {systemStatusItems.map((item) => (
+            <div key={item.label} className="status-pill">
+              <span className="status-pill-label">{item.label}</span>
+              <StatusBadge variant={item.variant}>{item.value}</StatusBadge>
+            </div>
+          ))}
         </div>
       </section>
 

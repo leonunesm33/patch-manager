@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { NavLink } from "react-router-dom";
+import { useAuth } from "@/features/auth/auth-context";
 
 const navigation = [
   {
@@ -22,7 +24,24 @@ const navigation = [
   },
 ];
 
+function getInitials(name: string) {
+  const parts = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (parts.length === 0) return "US";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+}
+
 export function AppSidebar() {
+  const { user, logout } = useAuth();
+  const [profileOpen, setProfileOpen] = useState(false);
+  const displayName = user?.full_name || user?.username || "Usuario";
+  const initials = getInitials(displayName);
+
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -50,15 +69,26 @@ export function AppSidebar() {
       ))}
 
       <div className="sidebar-footer">
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <div className="avatar">LM</div>
-          <div>
-            <div style={{ fontWeight: 700 }}>Infra Admin</div>
-            <div className="muted" style={{ fontSize: "0.85rem" }}>
-              Ambiente de homologacao
+        <button
+          aria-expanded={profileOpen}
+          className="profile-button"
+          onClick={() => setProfileOpen((current) => !current)}
+          type="button"
+        >
+          <span className="avatar">{initials}</span>
+          <span className="profile-name">{displayName}</span>
+        </button>
+        {profileOpen ? (
+          <div className="profile-menu">
+            <div className="profile-menu-meta">
+              <strong>{user?.username ?? "usuario"}</strong>
+              <span>{user?.role ?? "viewer"}</span>
             </div>
+            <button className="btn btn-danger profile-logout" onClick={logout} type="button">
+              Sair
+            </button>
           </div>
-        </div>
+        ) : null}
       </div>
     </aside>
   );

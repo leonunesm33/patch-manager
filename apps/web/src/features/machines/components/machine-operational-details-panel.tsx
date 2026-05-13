@@ -10,6 +10,7 @@ type MachineOperationalDetailsPanelProps = {
   error: string | null;
   inventoryAgentId: string | null;
   title?: string;
+  onClose?: () => void;
 };
 
 function getVariant(status: string) {
@@ -63,6 +64,7 @@ export function MachineOperationalDetailsPanel({
   error,
   inventoryAgentId,
   title = "Detalhes operacionais do host",
+  onClose,
 }: MachineOperationalDetailsPanelProps) {
   const [timelinePageSize, setTimelinePageSize] = useState(10);
   const [timelinePage, setTimelinePage] = useState(1);
@@ -85,6 +87,21 @@ export function MachineOperationalDetailsPanel({
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
+      {onClose ? (
+        <section className="panel section compact-panel">
+          <div className="section-header" style={{ marginBottom: 0 }}>
+            <div>
+              <h2 className="section-title">Painel do host</h2>
+              <p className="muted" style={{ margin: "6px 0 0" }}>
+                Informacoes abertas sob demanda. Feche para voltar ao inventario em tela cheia.
+              </p>
+            </div>
+            <button className="btn" onClick={onClose} type="button">
+              Fechar
+            </button>
+          </div>
+        </section>
+      ) : null}
       <AgentInventoryDetailPanel
         detail={details?.inventory ?? null}
         error={error && !details ? error : null}

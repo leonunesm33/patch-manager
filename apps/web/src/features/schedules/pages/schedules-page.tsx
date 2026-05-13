@@ -17,12 +17,25 @@ export function SchedulesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<ScheduleItem | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [form, setForm] = useState<ScheduleCreate>({
     name: "",
     scope: "Ubuntu Production",
     cron_label: "Toda quarta, 02:00",
     reboot_policy: "Somente se necessario",
   });
+
+  function resetScheduleForm() {
+    setEditingId(null);
+    setShowScheduleForm(false);
+    setFormError(null);
+    setForm({
+      name: "",
+      scope: "Ubuntu Production",
+      cron_label: "Toda quarta, 02:00",
+      reboot_policy: "Somente se necessario",
+    });
+  }
 
   useEffect(() => {
     let active = true;
@@ -63,13 +76,7 @@ export function SchedulesPage() {
           a.name.localeCompare(b.name),
         ),
       );
-      setForm({
-        name: "",
-        scope: "Ubuntu Production",
-        cron_label: "Toda quarta, 02:00",
-        reboot_policy: "Somente se necessario",
-      });
-      setEditingId(null);
+      resetScheduleForm();
     } catch (err) {
       setFormError(
         err instanceof Error
@@ -85,6 +92,7 @@ export function SchedulesPage() {
 
   function handleEditSchedule(schedule: ScheduleItem) {
     setEditingId(schedule.id);
+    setShowScheduleForm(true);
     setForm({
       name: schedule.name,
       scope: schedule.scope,
@@ -99,13 +107,7 @@ export function SchedulesPage() {
       await deleteSchedule(schedule.id);
       setSchedules((current) => current.filter((item) => item.id !== schedule.id));
       if (editingId === schedule.id) {
-        setEditingId(null);
-        setForm({
-          name: "",
-          scope: "Ubuntu Production",
-          cron_label: "Toda quarta, 02:00",
-          reboot_policy: "Somente se necessario",
-        });
+        resetScheduleForm();
       }
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Falha ao remover agendamento.");
@@ -115,7 +117,7 @@ export function SchedulesPage() {
   }
 
   return (
-    <div className="split-grid">
+    <div className={showScheduleForm || editingId ? "split-grid" : "single-panel-grid"}>
       <ConfirmModal
         open={pendingDelete !== null}
         title="Excluir agendamento"
@@ -135,9 +137,21 @@ export function SchedulesPage() {
       <section className="panel section">
         <div className="section-header">
           <h2 className="section-title">Agendamentos ativos</h2>
-          <span className="muted">
-            {loading ? "Carregando da API..." : `${schedules.length} politicas ativas`}
-          </span>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <span className="muted">
+              {loading ? "Carregando da API..." : `${schedules.length} politicas ativas`}
+            </span>
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                resetScheduleForm();
+                setShowScheduleForm(true);
+              }}
+              type="button"
+            >
+              Nova janela
+            </button>
+          </div>
         </div>
         {error ? (
           <p className="muted" style={{ marginTop: 0, marginBottom: 16 }}>
@@ -185,6 +199,7 @@ export function SchedulesPage() {
         </div>
       </section>
 
+      {showScheduleForm || editingId ? (
       <section className="panel section">
         <div className="section-header">
           <h2 className="section-title">Nova janela de manutencao</h2>
@@ -248,27 +263,13 @@ export function SchedulesPage() {
             <button className="btn btn-primary" type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Salvando..." : editingId ? "Salvar alteracoes" : "Criar agendamento"}
             </button>
-            {editingId ? (
-              <button
-                className="btn"
-                type="button"
-                onClick={() => {
-                  setEditingId(null);
-                  setForm({
-                    name: "",
-                    scope: "Ubuntu Production",
-                    cron_label: "Toda quarta, 02:00",
-                    reboot_policy: "Somente se necessario",
-                  });
-                  setFormError(null);
-                }}
-              >
-                Cancelar
-              </button>
-            ) : null}
+            <button className="btn" type="button" onClick={resetScheduleForm}>
+              Fechar
+            </button>
           </div>
         </form>
       </section>
+      ) : null}
     </div>
   );
 }

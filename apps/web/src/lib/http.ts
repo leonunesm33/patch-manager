@@ -25,11 +25,22 @@ export async function http<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error("Sessao expirada ou acesso nao autorizado.");
+    let detailMessage: string | null = null;
+
+    try {
+      const data = (await response.clone().json()) as { detail?: string };
+      if (typeof data.detail === "string" && data.detail.trim()) {
+        detailMessage = data.detail.trim();
+      }
+    } catch {
+      detailMessage = null;
     }
 
-    throw new Error(`Request failed with status ${response.status}`);
+    if (response.status === 401) {
+      throw new Error(detailMessage || "Sessao expirada ou acesso nao autorizado.");
+    }
+
+    throw new Error(detailMessage || `Request failed with status ${response.status}`);
   }
 
   if (response.status === 204) {

@@ -5,6 +5,7 @@ import {
   processPatchJobs,
   runPatchCycle,
 } from "@/features/reports/api";
+import { fetchDashboard } from "@/features/dashboard/api";
 import { StatusBadge } from "@/components/common/status-badge";
 import { formatDateTimeSaoPaulo, formatTimeSaoPaulo } from "@/lib/datetime";
 import type {
@@ -46,6 +47,7 @@ export function ReportsPage() {
   const [error, setError] = useState<string | null>(null);
   const [enqueuingCycle, setEnqueuingCycle] = useState(false);
   const [processingJobs, setProcessingJobs] = useState(false);
+  const [exportingDashboard, setExportingDashboard] = useState(false);
   const [cycleResult, setCycleResult] = useState<PatchCycleRunResponse | null>(null);
   const [processResult, setProcessResult] = useState<PatchJobProcessResponse | null>(null);
   const guardrailBlockedJobs = jobs.filter((job) => job.failure_reason?.startsWith("guardrail_"));
@@ -118,6 +120,36 @@ export function ReportsPage() {
     }
   }
 
+  async function handleExportDashboard() {
+    setError(null);
+    setExportingDashboard(true);
+
+    try {
+      const dashboard = await fetchDashboard();
+      const exportedAt = new Date().toISOString();
+      const payload = {
+        exported_at: exportedAt,
+        source: "Patch Manager Dashboard",
+        dashboard,
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json;charset=utf-8",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `patch-manager-dashboard-${exportedAt.slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao exportar dashboard.");
+    } finally {
+      setExportingDashboard(false);
+    }
+  }
+
   return (
     <section className="panel section">
       <div className="section-header">
@@ -128,6 +160,14 @@ export function ReportsPage() {
           </span>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
+          <button
+            className="btn"
+            disabled={exportingDashboard}
+            onClick={() => void handleExportDashboard()}
+            type="button"
+          >
+            {exportingDashboard ? "Exportando..." : "Exportar dashboard"}
+          </button>
           <button
             className="btn"
             disabled={enqueuingCycle}

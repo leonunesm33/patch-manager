@@ -53,6 +53,7 @@ export function ChangePasswordPage() {
       </div>
       <p className="muted" style={{ marginTop: 0, marginBottom: 20 }}>
         Por seguranca, a senha inicial precisa ser trocada antes de acessar o restante do painel.
+        A nova senha precisa ter pelo menos 10 caracteres.
       </p>
       <form className="form-grid" onSubmit={handleSubmit}>
         <label>

@@ -51,6 +51,8 @@ export function MachinesPage() {
   const [platformFilter, setPlatformFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [managementFilter, setManagementFilter] = useState("all");
+  const [showFilters, setShowFilters] = useState(false);
+  const [showMachineForm, setShowMachineForm] = useState(false);
   const [selectedMachineIds, setSelectedMachineIds] = useState<string[]>([]);
   const [batchAction, setBatchAction] = useState<"reboot" | "reintegrate" | "revoke" | null>(null);
   const [form, setForm] = useState<MachineCreate>({
@@ -63,6 +65,22 @@ export function MachinesPage() {
     pending_patches: 0,
     risk: "important",
   });
+
+  function resetMachineForm() {
+    setEditingId(null);
+    setShowMachineForm(false);
+    setFormError(null);
+    setForm({
+      name: "",
+      ip: "",
+      platform: "Windows",
+      environment: "production",
+      group: "",
+      status: "online",
+      pending_patches: 0,
+      risk: "important",
+    });
+  }
 
   useEffect(() => {
     let active = true;
@@ -112,17 +130,7 @@ export function MachinesPage() {
           a.name.localeCompare(b.name),
         ),
       );
-      setForm({
-        name: "",
-        ip: "",
-        platform: "Windows",
-        environment: "production",
-        group: "",
-        status: "online",
-        pending_patches: 0,
-        risk: "important",
-      });
-      setEditingId(null);
+      resetMachineForm();
     } catch (err) {
       setFormError(
         err instanceof Error
@@ -138,6 +146,7 @@ export function MachinesPage() {
 
   function handleEditMachine(machine: Machine) {
     setEditingId(machine.id);
+    setShowMachineForm(true);
     setForm({
       name: machine.name,
       ip: machine.ip,
@@ -157,17 +166,7 @@ export function MachinesPage() {
       setMachines((current) => current.filter((item) => item.id !== machine.id));
       setSelectedMachineIds((current) => current.filter((item) => item !== machine.id));
       if (editingId === machine.id) {
-        setEditingId(null);
-        setForm({
-          name: "",
-          ip: "",
-          platform: "Windows",
-          environment: "production",
-          group: "",
-          status: "online",
-          pending_patches: 0,
-          risk: "important",
-        });
+        resetMachineForm();
       }
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Falha ao remover maquina.");
@@ -260,9 +259,17 @@ export function MachinesPage() {
   const selectedManagedMachines = selectedMachines.filter((machine) => machine.id.startsWith("agent-"));
   const allFilteredSelected =
     filteredMachines.length > 0 && filteredMachines.every((machine) => selectedMachineIds.includes(machine.id));
+  const activeFilterCount = [
+    searchTerm.trim().length > 0,
+    platformFilter !== "all",
+    statusFilter !== "all",
+    managementFilter !== "all",
+  ].filter(Boolean).length;
+  const shouldShowOperationalDetails = detailsLoading || detailsError || machineDetails;
+  const hasSidePanel = shouldShowOperationalDetails || showMachineForm || editingId !== null;
 
   return (
-    <div className="split-grid">
+    <div className={hasSidePanel ? "split-grid" : "single-panel-grid"}>
       <ConfirmModal
         open={pendingDelete !== null}
         title="Excluir maquina"
@@ -309,9 +316,24 @@ export function MachinesPage() {
       <section className="panel section">
         <div className="section-header">
           <h2 className="section-title">Inventario de maquinas</h2>
-          <span className="muted">
-            {loading ? "Carregando da API..." : `${filteredMachines.length} de ${machines.length} maquinas visiveis`}
-          </span>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <span className="muted">
+              {loading ? "Carregando da API..." : `${filteredMachines.length} de ${machines.length} maquinas`}
+            </span>
+            <button className="btn" onClick={() => setShowFilters((current) => !current)} type="button">
+              {showFilters ? "Ocultar filtros" : activeFilterCount > 0 ? `Filtros (${activeFilterCount})` : "Filtros"}
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                resetMachineForm();
+                setShowMachineForm(true);
+              }}
+              type="button"
+            >
+              Nova maquina
+            </button>
+          </div>
         </div>
 
         {error ? (
@@ -320,7 +342,8 @@ export function MachinesPage() {
           </p>
         ) : null}
 
-        <div className="form-grid" style={{ marginBottom: 16 }}>
+        {showFilters ? (
+        <div className="form-grid subtle-filter-panel" style={{ marginBottom: 16 }}>
           <label>
             <span className="field-label">Busca</span>
             <input
@@ -371,6 +394,7 @@ export function MachinesPage() {
             </select>
           </label>
         </div>
+        ) : null}
 
         <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap" }}>
           <div className="muted">
@@ -447,7 +471,7 @@ export function MachinesPage() {
           <tbody>
             {!loading && filteredMachines.length === 0 ? (
               <tr>
-                <td colSpan={10} className="muted">
+                <td colSpan={11} className="muted">
                   Nenhuma maquina encontrada com os filtros atuais.
                 </td>
               </tr>
@@ -473,7 +497,21 @@ export function MachinesPage() {
                 <td>{machine.platform}</td>
                 <td>{machine.environment}</td>
                 <td>{machine.group}</td>
-                <td>{machine.pending_patches}</td>
+                <td>
+                  {machine.pending_patches > 0 ? (
+                    <button
+                      className="btn"
+                      onClick={() =>
+                        navigate(`/patches?machine_id=${encodeURIComponent(machine.id)}&approval_status=pending`)
+                      }
+                      type="button"
+                    >
+                      {machine.pending_patches} pendentes
+                    </button>
+                  ) : (
+                    <span className="muted">0</span>
+                  )}
+                </td>
                 <td>
                   {machine.post_patch_state ? (
                     <div style={{ display: "grid", gap: 6 }}>
@@ -540,13 +578,22 @@ export function MachinesPage() {
           </tbody>
         </table>
       </section>
-      <MachineOperationalDetailsPanel
-        details={machineDetails}
-        error={detailsError}
-        inventoryAgentId={inventoryAgentId}
-        loading={detailsLoading}
-      />
+      {shouldShowOperationalDetails ? (
+        <MachineOperationalDetailsPanel
+          details={machineDetails}
+          error={detailsError}
+          inventoryAgentId={inventoryAgentId}
+          loading={detailsLoading}
+          onClose={() => {
+            setMachineDetails(null);
+            setDetailsError(null);
+            setDetailsLoading(false);
+            setInventoryAgentId(null);
+          }}
+        />
+      ) : null}
 
+      {showMachineForm || editingId ? (
       <section className="panel section">
         <div className="section-header">
           <h2 className="section-title">Registrar maquina</h2>
@@ -669,31 +716,13 @@ export function MachinesPage() {
             <button className="btn btn-primary" type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Salvando..." : editingId ? "Salvar alteracoes" : "Registrar maquina"}
             </button>
-            {editingId ? (
-              <button
-                className="btn"
-                type="button"
-                onClick={() => {
-                  setEditingId(null);
-                  setForm({
-                    name: "",
-                    ip: "",
-                    platform: "Windows",
-                    environment: "production",
-                    group: "",
-                    status: "online",
-                    pending_patches: 0,
-                    risk: "important",
-                  });
-                  setFormError(null);
-                }}
-              >
-                Cancelar
-              </button>
-            ) : null}
+            <button className="btn" type="button" onClick={resetMachineForm}>
+              Fechar
+            </button>
           </div>
         </form>
       </section>
+      ) : null}
     </div>
   );
 }
