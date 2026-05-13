@@ -10,6 +10,8 @@ type MachineOperationalDetailsPanelProps = {
   error: string | null;
   inventoryAgentId: string | null;
   title?: string;
+  hideInventoryHeader?: boolean;
+  hideInventoryEmptyState?: boolean;
   onClose?: () => void;
 };
 
@@ -64,6 +66,8 @@ export function MachineOperationalDetailsPanel({
   error,
   inventoryAgentId,
   title = "Detalhes operacionais do host",
+  hideInventoryHeader = false,
+  hideInventoryEmptyState = false,
   onClose,
 }: MachineOperationalDetailsPanelProps) {
   const [timelinePageSize, setTimelinePageSize] = useState(10);
@@ -85,6 +89,10 @@ export function MachineOperationalDetailsPanel({
     }
   }, [timelinePage, timelineTotalPages]);
 
+  const inventoryError = error && !details ? error : null;
+  const shouldShowInventoryPanel =
+    !hideInventoryEmptyState || loading || Boolean(details?.inventory) || Boolean(inventoryError);
+
   return (
     <div style={{ display: "grid", gap: 18 }}>
       {onClose ? (
@@ -102,16 +110,20 @@ export function MachineOperationalDetailsPanel({
           </div>
         </section>
       ) : null}
-      <AgentInventoryDetailPanel
-        detail={details?.inventory ?? null}
-        error={error && !details ? error : null}
-        loading={loading}
-        title={
-          inventoryAgentId
-            ? `Inventario detalhado do host gerenciado por ${inventoryAgentId}`
-            : "Inventario detalhado do host"
-        }
-      />
+      {shouldShowInventoryPanel ? (
+        <AgentInventoryDetailPanel
+          detail={details?.inventory ?? null}
+          error={inventoryError}
+          hideEmptyState={hideInventoryEmptyState}
+          hideHeader={hideInventoryHeader}
+          loading={loading}
+          title={
+            inventoryAgentId
+              ? `Inventario detalhado do host gerenciado por ${inventoryAgentId}`
+              : "Inventario detalhado do host"
+          }
+        />
+      ) : null}
       <section className="panel section">
         <div className="section-header">
           <h2 className="section-title">{title}</h2>

@@ -266,10 +266,9 @@ export function MachinesPage() {
     managementFilter !== "all",
   ].filter(Boolean).length;
   const shouldShowOperationalDetails = detailsLoading || detailsError || machineDetails;
-  const hasSidePanel = shouldShowOperationalDetails || showMachineForm || editingId !== null;
 
   return (
-    <div className={hasSidePanel ? "split-grid" : "single-panel-grid"}>
+    <div className="single-panel-grid">
       <ConfirmModal
         open={pendingDelete !== null}
         title="Excluir maquina"
@@ -313,6 +312,176 @@ export function MachinesPage() {
         onCancel={() => setBatchAction(null)}
         onConfirm={() => void handleBatchAction()}
       />
+      {shouldShowOperationalDetails ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Detalhes operacionais da maquina">
+          <div className="modal-card modal-card-wide">
+            <div className="modal-toolbar">
+              <button
+                className="btn"
+                onClick={() => {
+                  setMachineDetails(null);
+                  setDetailsError(null);
+                  setDetailsLoading(false);
+                  setInventoryAgentId(null);
+                }}
+                type="button"
+              >
+                Fechar
+              </button>
+            </div>
+            <div className="modal-body-scroll">
+              <MachineOperationalDetailsPanel
+                details={machineDetails}
+                error={detailsError}
+                hideInventoryEmptyState
+                hideInventoryHeader
+                inventoryAgentId={inventoryAgentId}
+                loading={detailsLoading}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {showMachineForm || editingId ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Formulario da maquina">
+          <div className="modal-card modal-card-form">
+            <div className="modal-header">
+              <div>
+                <p className="eyebrow">{editingId ? "Edicao" : "Cadastro"}</p>
+                <h3 className="modal-title">{editingId ? "Editar maquina" : "Registrar maquina"}</h3>
+                <p className="modal-copy">
+                  {editingId
+                    ? "Atualize os dados do host mantendo o inventario visivel ao fundo."
+                    : "Inclua uma maquina manual sem deslocar a tela para a lateral."}
+                </p>
+              </div>
+              <button className="btn" type="button" onClick={resetMachineForm}>
+                Fechar
+              </button>
+            </div>
+            <form className="form-grid" onSubmit={handleSubmitMachine}>
+              <label>
+                <span className="field-label">Hostname</span>
+                <input
+                  className="input"
+                  value={form.name}
+                  onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                  placeholder="Ex.: SRV-APP-01"
+                />
+              </label>
+              <label>
+                <span className="field-label">IP</span>
+                <input
+                  className="input"
+                  value={form.ip}
+                  onChange={(event) => setForm((current) => ({ ...current, ip: event.target.value }))}
+                  placeholder="10.0.0.15"
+                />
+              </label>
+              <label>
+                <span className="field-label">Plataforma</span>
+                <select
+                  className="select"
+                  value={form.platform}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, platform: event.target.value }))
+                  }
+                >
+                  <option>Windows</option>
+                  <option>Ubuntu</option>
+                  <option>Debian</option>
+                  <option>RHEL</option>
+                </select>
+              </label>
+              <label>
+                <span className="field-label">Ambiente</span>
+                <select
+                  className="select"
+                  value={form.environment}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, environment: event.target.value }))
+                  }
+                >
+                  <option value="production">production</option>
+                  <option value="homolog">homolog</option>
+                  <option value="development">development</option>
+                </select>
+              </label>
+              <label>
+                <span className="field-label">Grupo</span>
+                <input
+                  className="input"
+                  value={form.group}
+                  onChange={(event) => setForm((current) => ({ ...current, group: event.target.value }))}
+                  placeholder="Ex.: App Servers"
+                />
+              </label>
+              <label>
+                <span className="field-label">Status</span>
+                <select
+                  className="select"
+                  value={form.status}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      status: event.target.value as MachineCreate["status"],
+                    }))
+                  }
+                >
+                  <option value="online">online</option>
+                  <option value="warning">warning</option>
+                  <option value="offline">offline</option>
+                </select>
+              </label>
+              <label>
+                <span className="field-label">Patches pendentes</span>
+                <input
+                  className="input"
+                  type="number"
+                  min="0"
+                  value={form.pending_patches}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      pending_patches: Number(event.target.value),
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                <span className="field-label">Risco</span>
+                <select
+                  className="select"
+                  value={form.risk}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      risk: event.target.value as MachineCreate["risk"],
+                    }))
+                  }
+                >
+                  <option value="critical">critical</option>
+                  <option value="important">important</option>
+                  <option value="optional">optional</option>
+                </select>
+              </label>
+              {formError ? (
+                <p className="muted" style={{ margin: 0, color: "#ff9fb0" }}>
+                  {formError}
+                </p>
+              ) : null}
+              <div style={{ display: "flex", gap: 10 }}>
+                <button className="btn btn-primary" type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? "Salvando..." : editingId ? "Salvar alteracoes" : "Registrar maquina"}
+                </button>
+                <button className="btn" type="button" onClick={resetMachineForm}>
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
       <section className="panel section">
         <div className="section-header">
           <h2 className="section-title">Inventario de maquinas</h2>
@@ -578,151 +747,6 @@ export function MachinesPage() {
           </tbody>
         </table>
       </section>
-      {shouldShowOperationalDetails ? (
-        <MachineOperationalDetailsPanel
-          details={machineDetails}
-          error={detailsError}
-          inventoryAgentId={inventoryAgentId}
-          loading={detailsLoading}
-          onClose={() => {
-            setMachineDetails(null);
-            setDetailsError(null);
-            setDetailsLoading(false);
-            setInventoryAgentId(null);
-          }}
-        />
-      ) : null}
-
-      {showMachineForm || editingId ? (
-      <section className="panel section">
-        <div className="section-header">
-          <h2 className="section-title">Registrar maquina</h2>
-          <span className="muted">
-            {editingId ? "Edicao autenticada" : "Cadastro inicial autenticado"}
-          </span>
-        </div>
-        <form className="form-grid" onSubmit={handleSubmitMachine}>
-          <label>
-            <span className="field-label">Hostname</span>
-            <input
-              className="input"
-              value={form.name}
-              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-              placeholder="Ex.: SRV-APP-01"
-            />
-          </label>
-          <label>
-            <span className="field-label">IP</span>
-            <input
-              className="input"
-              value={form.ip}
-              onChange={(event) => setForm((current) => ({ ...current, ip: event.target.value }))}
-              placeholder="10.0.0.15"
-            />
-          </label>
-          <label>
-            <span className="field-label">Plataforma</span>
-            <select
-              className="select"
-              value={form.platform}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, platform: event.target.value }))
-              }
-            >
-              <option>Windows</option>
-              <option>Ubuntu</option>
-              <option>Debian</option>
-              <option>RHEL</option>
-            </select>
-          </label>
-          <label>
-            <span className="field-label">Ambiente</span>
-            <select
-              className="select"
-              value={form.environment}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, environment: event.target.value }))
-              }
-            >
-              <option value="production">production</option>
-              <option value="homolog">homolog</option>
-              <option value="development">development</option>
-            </select>
-          </label>
-          <label>
-            <span className="field-label">Grupo</span>
-            <input
-              className="input"
-              value={form.group}
-              onChange={(event) => setForm((current) => ({ ...current, group: event.target.value }))}
-              placeholder="Ex.: App Servers"
-            />
-          </label>
-          <label>
-            <span className="field-label">Status</span>
-            <select
-              className="select"
-              value={form.status}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  status: event.target.value as MachineCreate["status"],
-                }))
-              }
-            >
-              <option value="online">online</option>
-              <option value="warning">warning</option>
-              <option value="offline">offline</option>
-            </select>
-          </label>
-          <label>
-            <span className="field-label">Patches pendentes</span>
-            <input
-              className="input"
-              type="number"
-              min="0"
-              value={form.pending_patches}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  pending_patches: Number(event.target.value),
-                }))
-              }
-            />
-          </label>
-          <label>
-            <span className="field-label">Risco</span>
-            <select
-              className="select"
-              value={form.risk}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  risk: event.target.value as MachineCreate["risk"],
-                }))
-              }
-            >
-              <option value="critical">critical</option>
-              <option value="important">important</option>
-              <option value="optional">optional</option>
-            </select>
-          </label>
-          {formError ? (
-            <p className="muted" style={{ margin: 0, color: "#ff9fb0" }}>
-              {formError}
-            </p>
-          ) : null}
-          <div style={{ display: "flex", gap: 10 }}>
-            <button className="btn btn-primary" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Salvando..." : editingId ? "Salvar alteracoes" : "Registrar maquina"}
-            </button>
-            <button className="btn" type="button" onClick={resetMachineForm}>
-              Fechar
-            </button>
-          </div>
-        </form>
-      </section>
-      ) : null}
     </div>
   );
 }

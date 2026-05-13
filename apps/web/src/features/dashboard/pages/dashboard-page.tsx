@@ -1,9 +1,16 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { StatCard } from "@/components/common/stat-card";
 import { StatusBadge } from "@/components/common/status-badge";
 import { fetchDashboard } from "@/features/dashboard/api";
 import type { DashboardResponse } from "@/features/dashboard/types";
 import { formatDateTimeSaoPaulo } from "@/lib/datetime";
+
+function formatPercent(value: number, total: number) {
+  if (total <= 0) return "0%";
+  const percent = (value / total) * 100;
+  return `${Number(percent.toFixed(percent < 10 && percent > 0 ? 1 : 0))}%`;
+}
 
 export function DashboardPage() {
   const [data, setData] = useState<DashboardResponse | null>(null);
@@ -91,6 +98,53 @@ export function DashboardPage() {
   const distributionLabel = data
     ? `${data.platform_distribution.windows_servers} / ${data.platform_distribution.windows_workstations} / ${data.platform_distribution.linux_servers}`
     : "0 / 0 / 0";
+  const windowsServerCount = data?.platform_distribution.windows_servers ?? 0;
+  const windowsWorkstationCount = data?.platform_distribution.windows_workstations ?? 0;
+  const linuxServerCount = data?.platform_distribution.linux_servers ?? 0;
+  const weeklyWindowsTotal = (data?.patch_volume ?? []).reduce(
+    (total, entry) => total + entry.windows,
+    0,
+  );
+  const weeklyLinuxTotal = (data?.patch_volume ?? []).reduce(
+    (total, entry) => total + entry.linux,
+    0,
+  );
+  const totalDistributionDevices =
+    windowsServerCount + windowsWorkstationCount + linuxServerCount;
+  const distributionSegments = [
+    {
+      label: "Servidores Windows",
+      value: windowsServerCount,
+      className: "windows-server",
+    },
+    {
+      label: "Estacoes Windows",
+      value: windowsWorkstationCount,
+      className: "windows-workstation",
+    },
+    {
+      label: "Servidores Linux",
+      value: linuxServerCount,
+      className: "linux",
+    },
+  ];
+  let distributionOffset = 0;
+  const distributionArcs = distributionSegments.map((segment) => {
+    const percent = totalDistributionDevices
+      ? (segment.value / totalDistributionDevices) * 100
+      : 0;
+    const arc = {
+      ...segment,
+      offset: distributionOffset,
+      percent,
+      tooltip: `${segment.label}: ${segment.value} dispositivos (${formatPercent(
+        segment.value,
+        totalDistributionDevices,
+      )})`,
+    };
+    distributionOffset += percent;
+    return arc;
+  });
   const systemStatusItems = [
     {
       label: "API",
@@ -142,33 +196,127 @@ export function DashboardPage() {
       <section className="content-grid">
         <section className="panel section">
           <div className="section-header">
-            <h2 className="section-title">Volume semanal de patches</h2>
-            <span className="muted">Windows x Linux</span>
+            <div>
+              <h2 className="section-title">Volume semanal de patches</h2>
+              <p className="section-caption">
+                Quantidade de patches pendentes reportados por plataforma em cada dia.
+              </p>
+            </div>
+            <Link className="reference-link" to="/patches">
+              Ver aprovacoes
+            </Link>
           </div>
           <div className="chart-bars">
-            {(data?.patch_volume ?? []).map((entry) => (
-              <div key={entry.label}>
-                <div className="bar-stack">
-                  <div className="bar linux" style={{ height: `${entry.linux * 14}px` }} />
-                  <div
-                    className="bar windows"
-                    style={{ height: `${entry.windows * 12}px` }}
-                  />
+            {(data?.patch_volume ?? []).map((entry) => {
+              const dailyTotal = entry.windows + entry.linux;
+              const linuxTooltip = `Linux - ${entry.label}: ${entry.linux} patches (${formatPercent(
+                entry.linux,
+                dailyTotal,
+              )})`;
+              const windowsTooltip = `Windows - ${entry.label}: ${entry.windows} patches (${formatPercent(
+                entry.windows,
+                dailyTotal,
+              )})`;
+
+              return (
+                <div key={entry.label} className="bar-column">
+                  <div className="bar-stack">
+                    <div className="bar-value">{dailyTotal}</div>
+                    <div
+                      aria-label={linuxTooltip}
+                      className="bar linux chart-hover-target"
+                      data-tooltip={linuxTooltip}
+                      role="img"
+                      style={{ height: `${entry.linux * 14}px` }}
+                      title={linuxTooltip}
+                    />
+                    <div
+                      aria-label={windowsTooltip}
+                      className="bar windows chart-hover-target"
+                      data-tooltip={windowsTooltip}
+                      role="img"
+                      style={{ height: `${entry.windows * 12}px` }}
+                      title={windowsTooltip}
+                    />
+                  </div>
+                  <div className="bar-label">{entry.label}</div>
                 </div>
-                <div className="bar-label">{entry.label}</div>
-              </div>
-            ))}
+              );
+            })}
+          </div>
+          <div className="chart-reference">
+            <div className="legend-list">
+              <span className="legend-item">
+                <span className="legend-dot linux" />
+                Linux: {weeklyLinuxTotal} patches na semana
+              </span>
+              <span className="legend-item">
+                <span className="legend-dot windows" />
+                Windows: {weeklyWindowsTotal} patches na semana
+              </span>
+            </div>
           </div>
         </section>
 
         <section className="panel section">
           <div className="section-header">
-            <h2 className="section-title">Distribuicao do parque</h2>
-            <span className="muted">{data?.summary.monitored_machines ?? 0} dispositivos</span>
+            <div>
+              <h2 className="section-title">Distribuicao do parque</h2>
+              <p className="section-caption">
+                Classificacao dos dispositivos monitorados por tipo de sistema.
+              </p>
+            </div>
+            <Link className="reference-link" to="/machines">
+              Ver maquinas
+            </Link>
           </div>
           <div className="ring-chart">
             <div className="ring">
+              <svg
+                aria-label="Distribuicao do parque por plataforma"
+                className="ring-svg"
+                role="img"
+                viewBox="0 0 180 180"
+              >
+                {totalDistributionDevices === 0 ? (
+                  <circle className="ring-segment empty" cx="90" cy="90" r="70">
+                    <title>Nenhum dispositivo monitorado no inventario</title>
+                  </circle>
+                ) : (
+                  distributionArcs.map((segment) => (
+                    <circle
+                      key={segment.label}
+                      aria-label={segment.tooltip}
+                      className={`ring-segment ${segment.className}`}
+                      cx="90"
+                      cy="90"
+                      pathLength="100"
+                      r="70"
+                      strokeDasharray={`${segment.percent} ${100 - segment.percent}`}
+                      strokeDashoffset={-segment.offset}
+                    >
+                      <title>{segment.tooltip}</title>
+                    </circle>
+                  ))
+                )}
+              </svg>
               <span>{distributionLabel}</span>
+            </div>
+          </div>
+          <div className="chart-reference">
+            <div className="legend-list vertical">
+              <span className="legend-item">
+                <span className="legend-dot windows-server" />
+                Servidores Windows: {windowsServerCount}
+              </span>
+              <span className="legend-item">
+                <span className="legend-dot windows-workstation" />
+                Estacoes Windows: {windowsWorkstationCount}
+              </span>
+              <span className="legend-item">
+                <span className="legend-dot linux" />
+                Servidores Linux: {linuxServerCount}
+              </span>
             </div>
           </div>
         </section>

@@ -7,6 +7,8 @@ type AgentInventoryDetailPanelProps = {
   loading: boolean;
   error: string | null;
   title?: string;
+  hideHeader?: boolean;
+  hideEmptyState?: boolean;
 };
 
 function renderVersion(label: string, value: string | null) {
@@ -23,19 +25,23 @@ export function AgentInventoryDetailPanel({
   loading,
   error,
   title = "Inventario detalhado",
+  hideHeader = false,
+  hideEmptyState = false,
 }: AgentInventoryDetailPanelProps) {
   return (
     <section className="panel section">
-      <div className="section-header">
-        <h2 className="section-title">{title}</h2>
-        <span className="muted">
-          {detail
-            ? `${detail.hostname} - ${detail.package_manager}`
-            : loading
-              ? "Carregando..."
-              : "Selecione um host gerenciado por agente"}
-        </span>
-      </div>
+      {!hideHeader ? (
+        <div className="section-header">
+          <h2 className="section-title">{title}</h2>
+          <span className="muted">
+            {detail
+              ? `${detail.hostname} - ${detail.package_manager}`
+              : loading
+                ? "Carregando..."
+                : "Selecione um host gerenciado por agente"}
+          </span>
+        </div>
+      ) : null}
 
       {error ? (
         <p className="muted" style={{ marginTop: 0, marginBottom: 16 }}>
@@ -45,7 +51,7 @@ export function AgentInventoryDetailPanel({
 
       {loading ? <p className="muted">Carregando inventario detalhado...</p> : null}
 
-      {!loading && !detail ? (
+      {!loading && !detail && !hideEmptyState ? (
         <p className="muted">
           Quando voce abrir o inventario de um agente, vamos mostrar aqui a lista detalhada de
           updates pendentes e o historico recente instalado nesse host.
