@@ -38,6 +38,7 @@ export function OperationsPage() {
   const [recentCommands, setRecentCommands] = useState<AgentCommandHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<{ tone: "ok" | "warn" | "error"; message: string } | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [selectedPendingAgents, setSelectedPendingAgents] = useState<string[]>([]);
   const [selectedRebootAgents, setSelectedRebootAgents] = useState<string[]>([]);
@@ -112,12 +113,14 @@ export function OperationsPage() {
 
   async function handleApprove(agentId: string) {
     setError(null);
+    setActionFeedback(null);
     setActionLoadingId(agentId);
     try {
       await approvePendingEnrollment(agentId);
       await load();
+      setActionFeedback({ tone: "ok", message: "Agente aprovado com sucesso." });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao aprovar o agente.");
+      setActionFeedback({ tone: "error", message: err instanceof Error ? err.message : "Falha ao aprovar o agente." });
     } finally {
       setActionLoadingId(null);
     }
@@ -125,12 +128,14 @@ export function OperationsPage() {
 
   async function handleReject(agentId: string) {
     setError(null);
+    setActionFeedback(null);
     setActionLoadingId(agentId);
     try {
       await rejectPendingEnrollment(agentId);
       await load();
+      setActionFeedback({ tone: "ok", message: "Agente rejeitado com sucesso." });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao rejeitar o agente.");
+      setActionFeedback({ tone: "error", message: err instanceof Error ? err.message : "Falha ao rejeitar o agente." });
     } finally {
       setActionLoadingId(null);
     }
@@ -138,12 +143,14 @@ export function OperationsPage() {
 
   async function handleRequeue(agentId: string) {
     setError(null);
+    setActionFeedback(null);
     setActionLoadingId(agentId);
     try {
       await requeueRevokedAgent(agentId);
       await load();
+      setActionFeedback({ tone: "ok", message: "Aprovacao reaberta para o agente revogado." });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao reabrir a aprovacao do agente.");
+      setActionFeedback({ tone: "error", message: err instanceof Error ? err.message : "Falha ao reabrir a aprovacao do agente." });
     } finally {
       setActionLoadingId(null);
     }
@@ -151,12 +158,14 @@ export function OperationsPage() {
 
   async function handleReopenRejected(agentId: string) {
     setError(null);
+    setActionFeedback(null);
     setActionLoadingId(agentId);
     try {
       await reopenRejectedEnrollment(agentId);
       await load();
+      setActionFeedback({ tone: "ok", message: "Aprovacao reaberta para o agente rejeitado." });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao reabrir a aprovacao do agente rejeitado.");
+      setActionFeedback({ tone: "error", message: err instanceof Error ? err.message : "Falha ao reabrir a aprovacao do agente rejeitado." });
     } finally {
       setActionLoadingId(null);
     }
@@ -164,117 +173,184 @@ export function OperationsPage() {
 
   async function handleReboot(agentId: string) {
     setError(null);
+    setActionFeedback(null);
     setActionLoadingId(agentId);
     try {
       await requestConnectedAgentReboot(agentId);
       await load();
+      setActionFeedback({ tone: "ok", message: "Solicitacao de reboot enviada para o agente." });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao solicitar reboot do host.");
+      setActionFeedback({ tone: "error", message: err instanceof Error ? err.message : "Falha ao solicitar reboot do host." });
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  async function handleReintegrateConnected(agentId: string) {
+    setError(null);
+    setActionFeedback(null);
+    setActionLoadingId(agentId);
+    try {
+      await reintegrateConnectedAgent(agentId);
+      await load();
+      setActionFeedback({ tone: "ok", message: "Reintegracao solicitada para o agente conectado." });
+    } catch (err) {
+      setActionFeedback({ tone: "error", message: err instanceof Error ? err.message : "Falha ao reintegrar o agente conectado." });
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  async function handleRevokeConnected(agentId: string) {
+    setError(null);
+    setActionFeedback(null);
+    setActionLoadingId(agentId);
+    try {
+      await revokeConnectedAgent(agentId);
+      await load();
+      setActionFeedback({ tone: "ok", message: "Agente conectado revogado com sucesso." });
+    } catch (err) {
+      setActionFeedback({ tone: "error", message: err instanceof Error ? err.message : "Falha ao revogar o agente conectado." });
     } finally {
       setActionLoadingId(null);
     }
   }
 
   async function handleBulkApprove() {
-    if (selectedPendingAgents.length === 0) return;
+    if (selectedPendingAgents.length === 0) {
+      setActionFeedback({ tone: "warn", message: "Selecione ao menos um agente pendente para aprovar em lote." });
+      return;
+    }
     setError(null);
+    setActionFeedback(null);
     setActionLoadingId("bulk-approve");
     try {
       await Promise.all(selectedPendingAgents.map((agentId) => approvePendingEnrollment(agentId)));
       setSelectedPendingAgents([]);
       await load();
+      setActionFeedback({ tone: "ok", message: "Agentes pendentes aprovados em lote com sucesso." });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao aprovar os agentes selecionados.");
+      setActionFeedback({ tone: "error", message: err instanceof Error ? err.message : "Falha ao aprovar os agentes selecionados." });
     } finally {
       setActionLoadingId(null);
     }
   }
 
   async function handleBulkReject() {
-    if (selectedPendingAgents.length === 0) return;
+    if (selectedPendingAgents.length === 0) {
+      setActionFeedback({ tone: "warn", message: "Selecione ao menos um agente pendente para rejeitar em lote." });
+      return;
+    }
     setError(null);
+    setActionFeedback(null);
     setActionLoadingId("bulk-reject");
     try {
       await Promise.all(selectedPendingAgents.map((agentId) => rejectPendingEnrollment(agentId)));
       setSelectedPendingAgents([]);
       await load();
+      setActionFeedback({ tone: "ok", message: "Agentes pendentes rejeitados em lote com sucesso." });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao rejeitar os agentes selecionados.");
+      setActionFeedback({ tone: "error", message: err instanceof Error ? err.message : "Falha ao rejeitar os agentes selecionados." });
     } finally {
       setActionLoadingId(null);
     }
   }
 
   async function handleBulkReboot() {
-    if (selectedRebootAgents.length === 0) return;
+    if (selectedRebootAgents.length === 0) {
+      setActionFeedback({ tone: "warn", message: "Selecione ao menos um host com reboot pendente." });
+      return;
+    }
     setError(null);
+    setActionFeedback(null);
     setActionLoadingId("bulk-reboot");
     try {
       await Promise.all(selectedRebootAgents.map((agentId) => requestConnectedAgentReboot(agentId)));
       setSelectedRebootAgents([]);
       await load();
+      setActionFeedback({ tone: "ok", message: "Solicitacao de reboot enviada para os hosts selecionados." });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao solicitar reboot para os hosts selecionados.");
+      setActionFeedback({ tone: "error", message: err instanceof Error ? err.message : "Falha ao solicitar reboot para os hosts selecionados." });
     } finally {
       setActionLoadingId(null);
     }
   }
 
   async function handleBulkReopenRejected() {
-    if (selectedRejectedAgents.length === 0) return;
+    if (selectedRejectedAgents.length === 0) {
+      setActionFeedback({ tone: "warn", message: "Selecione ao menos um agente rejeitado para reabrir em lote." });
+      return;
+    }
     setError(null);
+    setActionFeedback(null);
     setActionLoadingId("bulk-reopen-rejected");
     try {
       await Promise.all(selectedRejectedAgents.map((agentId) => reopenRejectedEnrollment(agentId)));
       setSelectedRejectedAgents([]);
       await load();
+      setActionFeedback({ tone: "ok", message: "Aprovacao reaberta para os agentes rejeitados selecionados." });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao reabrir os agentes rejeitados selecionados.");
+      setActionFeedback({ tone: "error", message: err instanceof Error ? err.message : "Falha ao reabrir os agentes rejeitados selecionados." });
     } finally {
       setActionLoadingId(null);
     }
   }
 
   async function handleBulkRequeueRevoked() {
-    if (selectedRevokedAgents.length === 0) return;
+    if (selectedRevokedAgents.length === 0) {
+      setActionFeedback({ tone: "warn", message: "Selecione ao menos um agente revogado para reabrir em lote." });
+      return;
+    }
     setError(null);
+    setActionFeedback(null);
     setActionLoadingId("bulk-requeue-revoked");
     try {
       await Promise.all(selectedRevokedAgents.map((agentId) => requeueRevokedAgent(agentId)));
       setSelectedRevokedAgents([]);
       await load();
+      setActionFeedback({ tone: "ok", message: "Aprovacao reaberta para os agentes revogados selecionados." });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao reabrir os agentes revogados selecionados.");
+      setActionFeedback({ tone: "error", message: err instanceof Error ? err.message : "Falha ao reabrir os agentes revogados selecionados." });
     } finally {
       setActionLoadingId(null);
     }
   }
 
   async function handleBulkReintegrateConnected() {
-    if (selectedConnectedAgents.length === 0) return;
+    if (selectedConnectedAgents.length === 0) {
+      setActionFeedback({ tone: "warn", message: "Selecione ao menos um agente conectado para reintegrar em lote." });
+      return;
+    }
     setError(null);
+    setActionFeedback(null);
     setActionLoadingId("bulk-reintegrate");
     try {
       await Promise.all(selectedConnectedAgents.map((agentId) => reintegrateConnectedAgent(agentId)));
       setSelectedConnectedAgents([]);
       await load();
+      setActionFeedback({ tone: "ok", message: "Reintegracao solicitada para os agentes conectados selecionados." });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao reintegrar os agentes conectados selecionados.");
+      setActionFeedback({ tone: "error", message: err instanceof Error ? err.message : "Falha ao reintegrar os agentes conectados selecionados." });
     } finally {
       setActionLoadingId(null);
     }
   }
 
   async function handleBulkRevokeConnected() {
-    if (selectedConnectedAgents.length === 0) return;
+    if (selectedConnectedAgents.length === 0) {
+      setActionFeedback({ tone: "warn", message: "Selecione ao menos um agente conectado para revogar em lote." });
+      return;
+    }
     setError(null);
+    setActionFeedback(null);
     setActionLoadingId("bulk-revoke");
     try {
       await Promise.all(selectedConnectedAgents.map((agentId) => revokeConnectedAgent(agentId)));
       setSelectedConnectedAgents([]);
       await load();
+      setActionFeedback({ tone: "ok", message: "Agentes conectados revogados em lote com sucesso." });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao revogar os agentes conectados selecionados.");
+      setActionFeedback({ tone: "error", message: err instanceof Error ? err.message : "Falha ao revogar os agentes conectados selecionados." });
     } finally {
       setActionLoadingId(null);
     }
@@ -285,14 +361,6 @@ export function OperationsPage() {
 
   return (
     <div>
-      <section className="hero">
-        <h1 className="hero-title">Acoes operacionais</h1>
-        <p className="hero-copy">
-          Esta area concentra as pendencias que exigem decisao rapida: reboot, aprovacao de agentes,
-          reintegracao e acompanhamento do pool Windows.
-        </p>
-      </section>
-
       {error ? (
         <section className="panel section">
           <div className="section-title">Falha ao carregar operacao</div>
@@ -300,6 +368,11 @@ export function OperationsPage() {
             {error}
           </p>
         </section>
+      ) : null}
+      {actionFeedback ? (
+        <div className={`inline-feedback inline-feedback-${actionFeedback.tone}`}>
+          {actionFeedback.message}
+        </div>
       ) : null}
 
       {loading ? (
@@ -401,7 +474,7 @@ export function OperationsPage() {
               <span className="muted">{rebootAgents.length} hosts</span>
               <button
                 className="btn"
-                disabled={selectedRebootAgents.length === 0 || actionLoadingId === "bulk-reboot"}
+                disabled={actionLoadingId === "bulk-reboot"}
                 onClick={() => void handleBulkReboot()}
                 type="button"
               >
@@ -421,13 +494,14 @@ export function OperationsPage() {
                   <label style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 700 }}>
                     <input
                       checked={selectedRebootAgents.includes(agent.agent_id)}
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        setActionFeedback(null);
                         setSelectedRebootAgents((current) =>
                           event.target.checked
                             ? [...current, agent.agent_id]
                             : current.filter((item) => item !== agent.agent_id),
-                        )
-                      }
+                        );
+                      }}
                       type="checkbox"
                     />
                     {agent.hostname}
@@ -505,7 +579,7 @@ export function OperationsPage() {
             <span className="muted">{connectedAgents.length} itens</span>
             <button
               className="btn"
-              disabled={selectedConnectedAgents.length === 0 || actionLoadingId === "bulk-reintegrate"}
+              disabled={actionLoadingId === "bulk-reintegrate"}
               onClick={() => void handleBulkReintegrateConnected()}
               type="button"
             >
@@ -513,7 +587,7 @@ export function OperationsPage() {
             </button>
             <button
               className="btn"
-              disabled={selectedConnectedAgents.length === 0 || actionLoadingId === "bulk-revoke"}
+              disabled={actionLoadingId === "bulk-revoke"}
               onClick={() => void handleBulkRevokeConnected()}
               type="button"
             >
@@ -533,13 +607,14 @@ export function OperationsPage() {
                 <label style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 700 }}>
                   <input
                     checked={selectedConnectedAgents.includes(agent.agent_id)}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      setActionFeedback(null);
                       setSelectedConnectedAgents((current) =>
                         event.target.checked
                           ? [...current, agent.agent_id]
                           : current.filter((item) => item !== agent.agent_id),
-                      )
-                    }
+                      );
+                    }}
                     type="checkbox"
                   />
                   {agent.hostname}
@@ -558,12 +633,12 @@ export function OperationsPage() {
                   {
                     label: "Forcar reintegracao",
                     disabled: actionLoadingId === agent.agent_id,
-                    onSelect: () => void reintegrateConnectedAgent(agent.agent_id).then(load),
+                    onSelect: () => void handleReintegrateConnected(agent.agent_id),
                   },
                   {
                     label: "Revogar agente",
                     disabled: actionLoadingId === agent.agent_id,
-                    onSelect: () => void revokeConnectedAgent(agent.agent_id).then(load),
+                    onSelect: () => void handleRevokeConnected(agent.agent_id),
                     tone: "danger",
                   },
                 ]}
@@ -581,7 +656,7 @@ export function OperationsPage() {
               <span className="muted">{pendingEnrollments.length} itens</span>
               <button
                 className="btn"
-                disabled={selectedPendingAgents.length === 0 || actionLoadingId === "bulk-approve"}
+                disabled={actionLoadingId === "bulk-approve"}
                 onClick={() => void handleBulkApprove()}
                 type="button"
               >
@@ -589,7 +664,7 @@ export function OperationsPage() {
               </button>
               <button
                 className="btn"
-                disabled={selectedPendingAgents.length === 0 || actionLoadingId === "bulk-reject"}
+                disabled={actionLoadingId === "bulk-reject"}
                 onClick={() => void handleBulkReject()}
                 type="button"
               >
@@ -608,16 +683,17 @@ export function OperationsPage() {
                 <div>
                   <label style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 700 }}>
                     <input
-                      checked={selectedPendingAgents.includes(agent.agent_id)}
-                      onChange={(event) =>
-                        setSelectedPendingAgents((current) =>
-                          event.target.checked
-                            ? [...current, agent.agent_id]
-                            : current.filter((item) => item !== agent.agent_id),
-                        )
-                      }
-                      type="checkbox"
-                    />
+                    checked={selectedPendingAgents.includes(agent.agent_id)}
+                    onChange={(event) => {
+                      setActionFeedback(null);
+                      setSelectedPendingAgents((current) =>
+                        event.target.checked
+                          ? [...current, agent.agent_id]
+                          : current.filter((item) => item !== agent.agent_id),
+                      );
+                    }}
+                    type="checkbox"
+                  />
                     {agent.hostname}
                   </label>
                   <div className="muted" style={{ marginTop: 4 }}>
@@ -654,7 +730,7 @@ export function OperationsPage() {
               <span className="muted">{rejectedEnrollments.length} itens</span>
               <button
                 className="btn"
-                disabled={selectedRejectedAgents.length === 0 || actionLoadingId === "bulk-reopen-rejected"}
+                disabled={actionLoadingId === "bulk-reopen-rejected"}
                 onClick={() => void handleBulkReopenRejected()}
                 type="button"
               >
@@ -673,16 +749,17 @@ export function OperationsPage() {
                 <div>
                   <label style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 700 }}>
                     <input
-                      checked={selectedRejectedAgents.includes(agent.agent_id)}
-                      onChange={(event) =>
-                        setSelectedRejectedAgents((current) =>
-                          event.target.checked
-                            ? [...current, agent.agent_id]
-                            : current.filter((item) => item !== agent.agent_id),
-                        )
-                      }
-                      type="checkbox"
-                    />
+                    checked={selectedRejectedAgents.includes(agent.agent_id)}
+                    onChange={(event) => {
+                      setActionFeedback(null);
+                      setSelectedRejectedAgents((current) =>
+                        event.target.checked
+                          ? [...current, agent.agent_id]
+                          : current.filter((item) => item !== agent.agent_id),
+                      );
+                    }}
+                    type="checkbox"
+                  />
                     {agent.hostname}
                   </label>
                   <div className="muted" style={{ marginTop: 4 }}>
@@ -713,7 +790,7 @@ export function OperationsPage() {
               <span className="muted">{revokedAgents.length} itens</span>
               <button
                 className="btn"
-                disabled={selectedRevokedAgents.length === 0 || actionLoadingId === "bulk-requeue-revoked"}
+                disabled={actionLoadingId === "bulk-requeue-revoked"}
                 onClick={() => void handleBulkRequeueRevoked()}
                 type="button"
               >
@@ -732,16 +809,17 @@ export function OperationsPage() {
                 <div>
                   <label style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 700 }}>
                     <input
-                      checked={selectedRevokedAgents.includes(agent.agent_id)}
-                      onChange={(event) =>
-                        setSelectedRevokedAgents((current) =>
-                          event.target.checked
-                            ? [...current, agent.agent_id]
-                            : current.filter((item) => item !== agent.agent_id),
-                        )
-                      }
-                      type="checkbox"
-                    />
+                    checked={selectedRevokedAgents.includes(agent.agent_id)}
+                    onChange={(event) => {
+                      setActionFeedback(null);
+                      setSelectedRevokedAgents((current) =>
+                        event.target.checked
+                          ? [...current, agent.agent_id]
+                          : current.filter((item) => item !== agent.agent_id),
+                      );
+                    }}
+                    type="checkbox"
+                  />
                     {agent.hostname ?? agent.agent_id}
                   </label>
                   <div className="muted" style={{ marginTop: 4 }}>

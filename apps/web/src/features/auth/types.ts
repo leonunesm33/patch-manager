@@ -14,6 +14,8 @@ export type User = {
   id: string;
   username: string;
   full_name: string;
+  avatar_initials: string | null;
+  avatar_color: string | null;
   role: string;
   is_active: boolean;
   must_change_password: boolean;
@@ -23,4 +25,10 @@ export type User = {
 export type PasswordChangeRequest = {
   current_password: string;
   new_password: string;
+};
+
+export type UserProfileUpdateRequest = {
+  full_name: string;
+  avatar_initials: string | null;
+  avatar_color: string | null;
 };

@@ -121,41 +121,37 @@ export function MachineDetailPage() {
         onCancel={() => setConfirmAction(null)}
         onConfirm={() => void handleConfirmAction()}
       />
-      <section className="hero">
-        <h1 className="hero-title">Detalhe do host</h1>
-        <p className="hero-copy">
-          Esta visao consolida inventario, jobs, execucoes e comandos operacionais de um unico host.
-        </p>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button className="btn" onClick={() => navigate("/machines")} type="button">
-            Voltar para maquinas
-          </button>
-          <button className="btn" onClick={() => void reload()} type="button">
-            Atualizar
-          </button>
-          {managedByAgent ? (
-            <>
-              <button className="btn" onClick={() => setConfirmAction("reboot")} type="button">
-                Solicitar reboot
-              </button>
-              <button className="btn" onClick={() => setConfirmAction("reintegrate")} type="button">
-                Reintegrar
-              </button>
-              <button className="btn" onClick={() => setConfirmAction("revoke")} type="button">
-                Revogar agente
-              </button>
-            </>
-          ) : null}
-        </div>
-      </section>
 
       <MachineOperationalDetailsPanel
         details={details}
         error={error}
+        hideInventoryEmptyState
+        hideInventoryHeader
         inventoryAgentId={inventoryAgentId}
         loading={loading}
         title={details ? `Host ${details.machine.name}` : "Detalhes do host"}
       />
+      <div className="page-action-footer">
+        <button className="btn" onClick={() => navigate("/machines")} type="button">
+          Voltar para maquinas
+        </button>
+        <button className="btn" onClick={() => void reload()} type="button">
+          Atualizar
+        </button>
+        {managedByAgent ? (
+          <>
+            <button className="btn" onClick={() => setConfirmAction("reboot")} type="button">
+              Solicitar reboot
+            </button>
+            <button className="btn" onClick={() => setConfirmAction("reintegrate")} type="button">
+              Reintegrar
+            </button>
+            <button className="btn" onClick={() => setConfirmAction("revoke")} type="button">
+              Revogar agente
+            </button>
+          </>
+        ) : null}
+      </div>
     </div>
   );
 }

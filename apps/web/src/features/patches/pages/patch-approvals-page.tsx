@@ -70,7 +70,6 @@ export function PatchApprovalsPage() {
     machines: 1,
     release_date: new Date().toISOString().slice(0, 10),
   });
-  const hasSidePanel = showPatchForm || editingId !== null;
 
   function resetPatchForm() {
     setEditingId(null);
@@ -190,7 +189,7 @@ export function PatchApprovalsPage() {
   }
 
   return (
-    <div className={hasSidePanel ? "split-grid" : "single-panel-grid"}>
+    <div className="single-panel-grid">
       <ConfirmModal
         open={pendingDelete !== null}
         title="Excluir patch"
@@ -217,7 +216,7 @@ export function PatchApprovalsPage() {
                 : `${patches.filter((patch) => patch.approval_status === "pending").length} pendentes`}
             </span>
             <button
-              className="btn btn-primary"
+              className="btn btn-primary btn-primary-uniform"
               onClick={() => {
                 resetPatchForm();
                 setShowPatchForm(true);
@@ -333,116 +332,126 @@ export function PatchApprovalsPage() {
       </section>
 
       {showPatchForm || editingId ? (
-      <section className="panel section">
-        <div className="section-header">
-          <h2 className="section-title">Registrar patch</h2>
-          <span className="muted">
-            {editingId ? "Edicao persistida no banco" : "Cadastro autenticado"}
-          </span>
-        </div>
-        <form className="form-grid" onSubmit={handleSubmitPatch}>
-          <label>
-            <span className="field-label">Identificador</span>
-            <input
-              className="input"
-              value={form.id}
-              onChange={(event) => setForm((current) => ({ ...current, id: event.target.value }))}
-              placeholder="Ex.: KB5034441"
-            />
-          </label>
-          <label>
-            <span className="field-label">Escopo</span>
-            <select
-              className="select"
-              value={form.target}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, target: event.target.value }))
-              }
-            >
-              <option>Windows Servers</option>
-              <option>Ubuntu Production</option>
-              <option>Linux Production</option>
-              <option>Finance Workstations</option>
-            </select>
-          </label>
-          <label>
-            <span className="field-label">Criticidade</span>
-            <select
-              className="select"
-              value={form.severity}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  severity: event.target.value as PatchSeverity,
-                }))
-              }
-            >
-              <option value="low">baixo</option>
-              <option value="medium">medio</option>
-              <option value="high">alto</option>
-              <option value="critical">critico</option>
-            </select>
-          </label>
-          <label>
-            <span className="field-label">Categoria</span>
-            <select
-              className="select"
-              value={form.category}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  category: event.target.value as PatchCategory,
-                }))
-              }
-            >
-              <option value="security">seguranca</option>
-              <option value="bugfix">bug</option>
-              <option value="stability">estabilidade</option>
-              <option value="feature">funcional</option>
-              <option value="other">outros</option>
-            </select>
-          </label>
-          <label>
-            <span className="field-label">Maquinas afetadas estimadas</span>
-            <input
-              className="input"
-              min="1"
-              type="number"
-              value={form.machines}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  machines: Number(event.target.value),
-                }))
-              }
-            />
-          </label>
-          <label>
-            <span className="field-label">Data de lancamento</span>
-            <input
-              className="input"
-              type="date"
-              value={form.release_date}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, release_date: event.target.value }))
-              }
-            />
-          </label>
-          {actionError ? (
-            <p className="muted" style={{ margin: 0, color: "#ff9fb0" }}>
-              {actionError}
-            </p>
-          ) : null}
-          <div style={{ display: "flex", gap: 10 }}>
-            <button className="btn btn-primary" disabled={isSubmitting} type="submit">
-              {isSubmitting ? "Salvando..." : editingId ? "Salvar alteracoes" : "Registrar patch"}
-            </button>
-            <button className="btn" onClick={resetPatchForm} type="button">
-              Fechar
-            </button>
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Formulario do patch">
+          <div className="modal-card modal-card-form">
+            <div className="modal-header">
+              <div>
+                <p className="eyebrow">{editingId ? "Edicao" : "Cadastro"}</p>
+                <h3 className="modal-title">{editingId ? "Editar patch" : "Registrar patch"}</h3>
+                <p className="modal-copy">
+                  {editingId
+                    ? "Atualize criticidade, categoria e escopo sem sair da fila de aprovacoes."
+                    : "Inclua um novo patch na fila mantendo a lista principal em contexto."}
+                </p>
+              </div>
+              <button className="btn" onClick={resetPatchForm} type="button">
+                Fechar
+              </button>
+            </div>
+            <form className="form-grid" onSubmit={handleSubmitPatch}>
+              <label>
+                <span className="field-label">Identificador</span>
+                <input
+                  className="input"
+                  value={form.id}
+                  onChange={(event) => setForm((current) => ({ ...current, id: event.target.value }))}
+                  placeholder="Ex.: KB5034441"
+                />
+              </label>
+              <label>
+                <span className="field-label">Escopo</span>
+                <select
+                  className="select"
+                  value={form.target}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, target: event.target.value }))
+                  }
+                >
+                  <option>Windows Servers</option>
+                  <option>Ubuntu Production</option>
+                  <option>Linux Production</option>
+                  <option>Finance Workstations</option>
+                </select>
+              </label>
+              <label>
+                <span className="field-label">Criticidade</span>
+                <select
+                  className="select"
+                  value={form.severity}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      severity: event.target.value as PatchSeverity,
+                    }))
+                  }
+                >
+                  <option value="low">baixo</option>
+                  <option value="medium">medio</option>
+                  <option value="high">alto</option>
+                  <option value="critical">critico</option>
+                </select>
+              </label>
+              <label>
+                <span className="field-label">Categoria</span>
+                <select
+                  className="select"
+                  value={form.category}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      category: event.target.value as PatchCategory,
+                    }))
+                  }
+                >
+                  <option value="security">seguranca</option>
+                  <option value="bugfix">bug</option>
+                  <option value="stability">estabilidade</option>
+                  <option value="feature">funcional</option>
+                  <option value="other">outros</option>
+                </select>
+              </label>
+              <label>
+                <span className="field-label">Maquinas afetadas estimadas</span>
+                <input
+                  className="input"
+                  min="1"
+                  type="number"
+                  value={form.machines}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      machines: Number(event.target.value),
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                <span className="field-label">Data de lancamento</span>
+                <input
+                  className="input"
+                  type="date"
+                  value={form.release_date}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, release_date: event.target.value }))
+                  }
+                />
+              </label>
+              {actionError ? (
+                <p className="muted" style={{ margin: 0, color: "#ff9fb0" }}>
+                  {actionError}
+                </p>
+              ) : null}
+              <div style={{ display: "flex", gap: 10 }}>
+                <button className="btn btn-primary btn-primary-uniform" disabled={isSubmitting} type="submit">
+                  {isSubmitting ? "Salvando..." : editingId ? "Salvar alteracoes" : "Registrar patch"}
+                </button>
+                <button className="btn" onClick={resetPatchForm} type="button">
+                  Cancelar
+                </button>
+              </div>
+            </form>
           </div>
-        </form>
-      </section>
+        </div>
       ) : null}
     </div>
   );

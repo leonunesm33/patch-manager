@@ -50,6 +50,7 @@ def get_current_user(
 
 ROLE_LEVELS = {
     "viewer": 10,
+    "user": 20,
     "operator": 20,
     "admin": 30,
 }

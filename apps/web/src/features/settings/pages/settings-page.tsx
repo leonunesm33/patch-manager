@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ConfirmModal } from "@/components/common/confirm-modal";
 import { StatusBadge } from "@/components/common/status-badge";
 import { formatDateTimeSaoPaulo } from "@/lib/datetime";
@@ -16,11 +16,32 @@ import type {
   SettingsResponse,
 } from "@/features/settings/types";
 
+function InfoHint({ text }: { text: string }) {
+  return (
+    <span className="info-hint">
+      <button aria-label={text} className="info-hint-button" type="button">
+        ?
+      </button>
+      <span className="info-hint-popover">{text}</span>
+    </span>
+  );
+}
+
+function SettingTitle({ children, help }: { children: ReactNode; help: string }) {
+  return (
+    <span className="setting-title-row">
+      <strong>{children}</strong>
+      <InfoHint text={help} />
+    </span>
+  );
+}
+
 export function SettingsPage() {
   const [settings, setSettings] = useState<SettingsResponse | null>(null);
   const [schedulerStatus, setSchedulerStatus] = useState<SchedulerStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ tone: "ok" | "warn" | "error"; message: string } | null>(null);
   const [schedulerLoading, setSchedulerLoading] = useState(false);
   const [executionLoading, setExecutionLoading] = useState(false);
   const [bootstrapTokenDraft, setBootstrapTokenDraft] = useState("");
@@ -99,13 +120,21 @@ export function SettingsPage() {
 
   async function handleSchedulerToggle() {
     setError(null);
+    setFeedback(null);
     setSchedulerLoading(true);
 
     try {
       const response = schedulerStatus?.running ? await stopScheduler() : await startScheduler();
       setSchedulerStatus(response);
+      setFeedback({
+        tone: "ok",
+        message: response.running ? "Scheduler iniciado com sucesso." : "Scheduler pausado com sucesso.",
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao atualizar o scheduler.");
+      setFeedback({
+        tone: "error",
+        message: err instanceof Error ? err.message : "Falha ao atualizar o scheduler.",
+      });
     } finally {
       setSchedulerLoading(false);
     }
@@ -113,6 +142,7 @@ export function SettingsPage() {
 
   async function handleExecutionModeChange(mode: ExecutionSettings["linux_agent_mode"]) {
     setError(null);
+    setFeedback(null);
     setExecutionLoading(true);
 
     try {
@@ -130,17 +160,22 @@ export function SettingsPage() {
         windows_reboot_grace_minutes: settings?.execution.windows_reboot_grace_minutes,
       });
       setSettings((current) => (current ? { ...current, execution: response } : current));
+      setFeedback({ tone: "ok", message: `Modo Linux atualizado para ${mode}.` });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao atualizar o modo do agente Linux.");
+      setFeedback({
+        tone: "error",
+        message: err instanceof Error ? err.message : "Falha ao atualizar o modo do agente Linux.",
+      });
     } finally {
       setExecutionLoading(false);
     }
   }
 
-  async function handleExecutionGuardrailsSave() {
+  async function handleExecutionGuardrailsSave(message = "Politicas salvas com sucesso.") {
     if (!settings) return;
 
     setError(null);
+    setFeedback(null);
     setExecutionLoading(true);
     try {
       const response = await updateLinuxExecutionMode(settings.execution.linux_agent_mode, undefined, {
@@ -165,8 +200,12 @@ export function SettingsPage() {
       setRebootGraceDraft(String(response.reboot_grace_minutes));
       setWindowsTimeoutDraft(String(response.windows_command_timeout_seconds));
       setWindowsRebootGraceDraft(String(response.windows_reboot_grace_minutes));
+      setFeedback({ tone: "ok", message });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao atualizar as politicas de execucao.");
+      setFeedback({
+        tone: "error",
+        message: err instanceof Error ? err.message : "Falha ao atualizar as politicas de execucao.",
+      });
     } finally {
       setExecutionLoading(false);
     }
@@ -191,6 +230,7 @@ export function SettingsPage() {
           }
         : current,
     );
+    setFeedback({ tone: "warn", message: "Apply real foi desligado no rascunho. Clique em salvar para persistir." });
   }
 
   function confirmEnableRealApply() {
@@ -206,6 +246,7 @@ export function SettingsPage() {
         : current,
     );
     setConfirmRealApplyOpen(false);
+    setFeedback({ tone: "warn", message: "Apply real foi habilitado no rascunho. Clique em salvar para persistir." });
   }
 
   async function handleGroupExecutionModeChange(
@@ -213,13 +254,18 @@ export function SettingsPage() {
     mode: ExecutionSettings["linux_agent_mode"],
   ) {
     setError(null);
+    setFeedback(null);
     setExecutionLoading(true);
 
     try {
       const response = await updateLinuxExecutionMode(mode, machineGroup);
       setSettings((current) => (current ? { ...current, execution: response } : current));
+      setFeedback({ tone: "ok", message: `Politica do grupo ${machineGroup} atualizada para ${mode}.` });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao atualizar a politica do grupo Linux.");
+      setFeedback({
+        tone: "error",
+        message: err instanceof Error ? err.message : "Falha ao atualizar a politica do grupo Linux.",
+      });
     } finally {
       setExecutionLoading(false);
     }
@@ -227,6 +273,7 @@ export function SettingsPage() {
 
   async function handleBootstrapTokenSave() {
     setError(null);
+    setFeedback(null);
     setBootstrapLoading(true);
     try {
       const expiresInDays = Number(bootstrapExpiryDaysDraft);
@@ -238,38 +285,19 @@ export function SettingsPage() {
       setSettings((current) => (current ? { ...current, bootstrap: response } : current));
       setBootstrapTokenDraft(response.agent_bootstrap_token);
       setInstallServerUrlDraft(response.agent_install_server_url);
+      setFeedback({ tone: "ok", message: "Bootstrap salvo com sucesso." });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao atualizar o bootstrap token.");
+      setFeedback({
+        tone: "error",
+        message: err instanceof Error ? err.message : "Falha ao atualizar o bootstrap token.",
+      });
     } finally {
       setBootstrapLoading(false);
     }
   }
 
   return (
-    <div className="settings-page">
-      <section className="settings-overview">
-        <div className="panel stat-card" style={{ "--tone": "var(--accent)" } as CSSProperties}>
-          <p className="eyebrow">Scheduler</p>
-          <p className="metric">{schedulerStatus?.running ? "ON" : "OFF"}</p>
-          <p className="muted">Fila e worker</p>
-        </div>
-        <div className="panel stat-card" style={{ "--tone": "var(--success)" } as CSSProperties}>
-          <p className="eyebrow">Linux</p>
-          <p className="metric">{settings?.execution.linux_agent_mode ?? "dry-run"}</p>
-          <p className="muted">Modo padrao</p>
-        </div>
-        <div className="panel stat-card" style={{ "--tone": "var(--warning)" } as CSSProperties}>
-          <p className="eyebrow">Apply real</p>
-          <p className="metric">{settings?.execution.real_apply_enabled ? "ON" : "OFF"}</p>
-          <p className="muted">Guardrail Linux</p>
-        </div>
-        <div className="panel stat-card" style={{ "--tone": "var(--danger)" } as CSSProperties}>
-          <p className="eyebrow">Bootstrap</p>
-          <p className="metric">{settings?.bootstrap.agent_bootstrap_token_is_expired ? "EXP" : "OK"}</p>
-          <p className="muted">Token inicial</p>
-        </div>
-      </section>
-
+    <div className="settings-page settings-page-grouped">
       {error ? (
         <section className="panel section settings-card-wide">
           <p className="muted" style={{ margin: 0, color: "#ff9fb0" }}>
@@ -277,442 +305,458 @@ export function SettingsPage() {
           </p>
         </section>
       ) : null}
+      {feedback ? (
+        <div className={`inline-feedback inline-feedback-${feedback.tone} settings-card-wide`}>
+          {feedback.message}
+        </div>
+      ) : null}
       {loading ? (
         <section className="panel section settings-card-wide">
           <p className="muted" style={{ margin: 0 }}>Carregando configuracoes...</p>
         </section>
       ) : null}
 
-      <section className="panel section settings-card">
-        <div className="section-header">
-          <h2 className="section-title">Orquestracao do scheduler</h2>
-          {schedulerStatus ? (
-            <StatusBadge variant={schedulerStatus.running ? "ok" : "warn"}>
-              {schedulerStatus.running ? "Ativo" : "Pausado"}
-            </StatusBadge>
-          ) : null}
-        </div>
-        {schedulerStatus ? (
-          <div className="list">
-            <div className="list-item">
-              <div>
-                <div style={{ fontWeight: 700 }}>Enfileiramento</div>
-                <div className="muted" style={{ marginTop: 4 }}>
-                  A cada {schedulerStatus.enqueue_interval_seconds} segundos.
-                </div>
-              </div>
-              <div className="code">{schedulerStatus.enqueue_interval_seconds}s</div>
-            </div>
-            <div className="list-item">
-              <div>
-                <div style={{ fontWeight: 700 }}>Worker</div>
-                <div className="muted" style={{ marginTop: 4 }}>
-                  Processa um job por vez a cada {schedulerStatus.worker_interval_seconds} segundos.
-                </div>
-              </div>
-              <div className="code">{schedulerStatus.worker_interval_seconds}s</div>
-            </div>
+      <section className="settings-group settings-card-wide">
+        <div className="settings-group-header">
+          <div>
+            <p className="eyebrow">Globais</p>
+            <h2 className="section-title">Configuracoes globais</h2>
           </div>
-        ) : null}
-        <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-          <button
-            className="btn btn-primary"
-            disabled={schedulerLoading}
-            onClick={() => void handleSchedulerToggle()}
-            type="button"
-          >
-            {schedulerLoading
-              ? "Atualizando..."
-              : schedulerStatus?.running
-                ? "Pausar scheduler"
-                : "Iniciar scheduler"}
-          </button>
+          <StatusBadge variant={schedulerStatus?.running ? "ok" : "warn"}>
+            {schedulerStatus?.running ? "Scheduler ativo" : "Scheduler pausado"}
+          </StatusBadge>
+        </div>
+        <div className="settings-section-grid">
+          <section className="panel section settings-tile">
+            <div className="section-header">
+              <h3 className="section-title">Orquestracao do scheduler</h3>
+              <InfoHint text="Controla a fila de jobs e o worker interno que processa agendamentos." />
+            </div>
+            {schedulerStatus ? (
+              <div className="compact-setting-list">
+                <div className="setting-row">
+                  <SettingTitle help="Intervalo usado para procurar agendamentos e enfileirar jobs.">
+                    Enfileiramento
+                  </SettingTitle>
+                  <span className="code">{schedulerStatus.enqueue_interval_seconds}s</span>
+                </div>
+                <div className="setting-row">
+                  <SettingTitle help="Intervalo do worker que processa um job por vez.">
+                    Worker
+                  </SettingTitle>
+                  <span className="code">{schedulerStatus.worker_interval_seconds}s</span>
+                </div>
+              </div>
+            ) : null}
+            <button
+              className="btn btn-primary"
+              disabled={schedulerLoading}
+              onClick={() => void handleSchedulerToggle()}
+              type="button"
+            >
+              {schedulerLoading
+                ? "Atualizando..."
+                : schedulerStatus?.running
+                  ? "Pausar scheduler"
+                  : "Iniciar scheduler"}
+            </button>
+          </section>
+
+          <section className="panel section settings-tile">
+            <div className="section-header">
+              <h3 className="section-title">Bootstrap e instalacao</h3>
+              {settings ? (
+                <StatusBadge variant={settings.bootstrap.agent_bootstrap_token_is_expired ? "error" : "ok"}>
+                  {settings.bootstrap.agent_bootstrap_token_is_expired ? "expirado" : "ativo"}
+                </StatusBadge>
+              ) : null}
+            </div>
+            <div className="form-grid">
+              <label>
+                <span className="field-label">
+                  Bootstrap token <InfoHint text="Token inicial usado pelos agentes durante o primeiro cadastro." />
+                </span>
+                <input
+                  className="input"
+                  onChange={(event) => setBootstrapTokenDraft(event.target.value)}
+                  type="text"
+                  value={bootstrapTokenDraft}
+                />
+              </label>
+              <label>
+                <span className="field-label">
+                  URL publica do servidor <InfoHint text="Endereco usado pelos instaladores dos agentes para chegar na central." />
+                </span>
+                <input
+                  className="input"
+                  onChange={(event) => setInstallServerUrlDraft(event.target.value)}
+                  type="text"
+                  value={installServerUrlDraft}
+                />
+              </label>
+              <label>
+                <span className="field-label">
+                  Expiracao do token <InfoHint text="Quantidade de dias ate o token bootstrap expirar." />
+                </span>
+                <input
+                  className="input"
+                  min="1"
+                  onChange={(event) => setBootstrapExpiryDaysDraft(event.target.value)}
+                  type="number"
+                  value={bootstrapExpiryDaysDraft}
+                />
+              </label>
+              <button
+                className="btn btn-primary"
+                disabled={bootstrapLoading}
+                onClick={() => void handleBootstrapTokenSave()}
+                type="button"
+              >
+                {bootstrapLoading ? "Salvando..." : "Salvar bootstrap"}
+              </button>
+              <span className="muted">
+                Rotacionado em{" "}
+                {settings?.bootstrap.agent_bootstrap_token_rotated_at
+                  ? formatDateTimeSaoPaulo(settings.bootstrap.agent_bootstrap_token_rotated_at)
+                  : "sem registro"}
+              </span>
+            </div>
+          </section>
         </div>
       </section>
 
-      <section className="panel section settings-card">
-        <div className="section-header">
-          <h2 className="section-title">Modo do agente Linux</h2>
+      <section className="settings-group settings-card-wide">
+        <div className="settings-group-header">
+          <div>
+            <p className="eyebrow">Linux</p>
+            <h2 className="section-title">Politicas Linux</h2>
+          </div>
           <span className="muted">{settings?.execution.linux_agent_mode ?? "dry-run"}</span>
         </div>
-        <div className="list-item">
-          <div>
-            <div style={{ fontWeight: 700 }}>Politica de execucao</div>
-            <div className="muted" style={{ marginTop: 4 }}>
-              `dry-run` inspeciona. `apply` segue os guardrails configurados.
+        <div className="settings-section-grid">
+          <section className="panel section settings-tile">
+            <div className="section-header">
+              <h3 className="section-title">Modo do agente</h3>
+              <InfoHint text="dry-run apenas inspeciona. apply executa conforme guardrails configurados." />
             </div>
-          </div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            {(["dry-run", "apply"] as const).map((mode) => (
-              <button
-                key={mode}
-                className={settings?.execution.linux_agent_mode === mode ? "btn btn-primary" : "btn"}
-                disabled={executionLoading}
-                onClick={() => void handleExecutionModeChange(mode)}
-                type="button"
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
+            <div className="segmented-actions">
+              {(["dry-run", "apply"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  className={settings?.execution.linux_agent_mode === mode ? "btn btn-primary" : "btn"}
+                  disabled={executionLoading}
+                  onClick={() => void handleExecutionModeChange(mode)}
+                  type="button"
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+          </section>
 
-      <section className="panel section settings-card-wide">
-        <div className="section-header">
-          <h2 className="section-title">Guardrails Linux</h2>
-          <span className="muted">{settings?.execution.real_apply_enabled ? "apply real habilitado" : "apply real bloqueado"}</span>
-        </div>
-        <div className="content-grid">
-          <div className="list">
-            <div className="list-item">
-              <div>
-                <div style={{ fontWeight: 700 }}>Habilitacao de apply real</div>
-                <div className="muted" style={{ marginTop: 4 }}>{realApplyAuditLabel}</div>
-              </div>
-              <button
-                className={settings?.execution.real_apply_enabled ? "btn btn-primary" : "btn"}
-                disabled={executionLoading}
-                onClick={handleRealApplyToggle}
-                type="button"
-              >
-                {settings?.execution.real_apply_enabled ? "Ligado" : "Desligado"}
-              </button>
+          <section className="panel section settings-tile">
+            <div className="section-header">
+              <h3 className="section-title">Politicas por grupo</h3>
+              <span className="muted">{settings?.execution.linux_group_modes.length ?? 0} grupos</span>
             </div>
-            <div className="list-item">
-              <div>
-                <div style={{ fontWeight: 700 }}>Somente seguranca</div>
-                <div className="muted" style={{ marginTop: 4 }}>
-                  Restringe apply real a candidatos com indicio de origem security.
+            <div className="settings-scroll-list compact-setting-list">
+              {(settings?.execution.linux_group_modes ?? []).length === 0 ? (
+                <div className="setting-row">
+                  <span className="muted">Nenhum grupo cadastrado ainda.</span>
                 </div>
-              </div>
-              <button
-                className={settings?.execution.allow_security_only ? "btn btn-primary" : "btn"}
-                disabled={executionLoading}
-                onClick={() =>
-                  setSettings((current) =>
-                    current
-                      ? {
-                          ...current,
-                          execution: {
-                            ...current.execution,
-                            allow_security_only: !current.execution.allow_security_only,
-                          },
-                        }
-                      : current,
-                  )
-                }
-                type="button"
-              >
-                {settings?.execution.allow_security_only ? "Ligado" : "Desligado"}
-              </button>
+              ) : null}
+              {(settings?.execution.linux_group_modes ?? []).map((item) => (
+                <div key={item.group_name} className="setting-row">
+                  <SettingTitle help={item.uses_default ? "Segue a politica Linux global." : "Override persistido para este grupo."}>
+                    {item.group_name}
+                  </SettingTitle>
+                  <div className="segmented-actions">
+                    {(["dry-run", "apply"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        className={item.linux_agent_mode === mode ? "btn btn-primary" : "btn"}
+                        disabled={executionLoading}
+                        onClick={() => void handleGroupExecutionModeChange(item.group_name, mode)}
+                        type="button"
+                      >
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="list-item">
-              <div>
-                <div style={{ fontWeight: 700 }}>Politica de reboot</div>
-                <div className="muted" style={{ marginTop: 4 }}>
-                  Tratamento de reboot pendente apos patch aplicado.
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                {(["manual", "notify", "maintenance-window"] as const).map((policy) => (
+          </section>
+
+          <section className="panel section settings-tile settings-tile-wide">
+            <div className="section-header">
+              <h3 className="section-title">Guardrails Linux</h3>
+              <span className="muted">{settings?.execution.real_apply_enabled ? "apply real habilitado" : "apply real bloqueado"}</span>
+            </div>
+            <div className="content-grid">
+              <div className="compact-setting-list">
+                <div className="setting-row">
+                  <SettingTitle help={realApplyAuditLabel}>Apply real</SettingTitle>
                   <button
-                    key={policy}
-                    className={settings?.execution.reboot_policy === policy ? "btn btn-primary" : "btn"}
+                    className={settings?.execution.real_apply_enabled ? "btn btn-primary" : "btn"}
+                    disabled={executionLoading}
+                    onClick={handleRealApplyToggle}
+                    type="button"
+                  >
+                    {settings?.execution.real_apply_enabled ? "Ligado" : "Desligado"}
+                  </button>
+                </div>
+                <div className="setting-row">
+                  <SettingTitle help="Restringe apply real a candidatos com indicio de origem security.">
+                    Somente seguranca
+                  </SettingTitle>
+                  <button
+                    className={settings?.execution.allow_security_only ? "btn btn-primary" : "btn"}
                     disabled={executionLoading}
                     onClick={() =>
                       setSettings((current) =>
                         current
                           ? {
                               ...current,
-                              execution: { ...current.execution, reboot_policy: policy },
+                              execution: {
+                                ...current.execution,
+                                allow_security_only: !current.execution.allow_security_only,
+                              },
                             }
                           : current,
                       )
                     }
                     type="button"
                   >
-                    {policy}
+                    {settings?.execution.allow_security_only ? "Ligado" : "Desligado"}
                   </button>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div className="form-grid">
-            <label>
-              <span className="field-label">Allowlist de pacotes</span>
-              <input
-                className="input"
-                onChange={(event) => setAllowedPatternsDraft(event.target.value)}
-                type="text"
-                value={allowedPatternsDraft}
-              />
-            </label>
-            <label>
-              <span className="field-label">Timeout de apply (segundos)</span>
-              <input
-                className="input"
-                min="30"
-                onChange={(event) => setTimeoutDraft(event.target.value)}
-                type="number"
-                value={timeoutDraft}
-              />
-            </label>
-            <label>
-              <span className="field-label">Grace de reboot Linux (minutos)</span>
-              <input
-                className="input"
-                min="5"
-                onChange={(event) => setRebootGraceDraft(event.target.value)}
-                type="number"
-                value={rebootGraceDraft}
-              />
-            </label>
-            <button
-              className="btn btn-primary"
-              disabled={executionLoading}
-              onClick={() => void handleExecutionGuardrailsSave()}
-              type="button"
-            >
-              {executionLoading ? "Salvando..." : "Salvar politicas"}
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section className="panel section settings-card">
-        <div className="section-header">
-          <h2 className="section-title">Politicas Linux por grupo</h2>
-          <span className="muted">{settings?.execution.linux_group_modes.length ?? 0} grupos</span>
-        </div>
-        <div className="list settings-scroll-list">
-          {(settings?.execution.linux_group_modes ?? []).length === 0 ? (
-            <div className="list-item">
-              <div className="muted">Nenhum grupo cadastrado ainda.</div>
-            </div>
-          ) : null}
-          {(settings?.execution.linux_group_modes ?? []).map((item) => (
-            <div key={item.group_name} className="list-item">
-              <div>
-                <div style={{ fontWeight: 700 }}>{item.group_name}</div>
-                <div className="muted" style={{ marginTop: 4 }}>
-                  {item.uses_default ? "Segue a politica global." : "Override persistido."}
+                </div>
+                <div className="setting-row">
+                  <SettingTitle help="Tratamento de reboot pendente apos patch aplicado.">
+                    Politica de reboot
+                  </SettingTitle>
+                  <div className="segmented-actions">
+                    {(["manual", "notify", "maintenance-window"] as const).map((policy) => (
+                      <button
+                        key={policy}
+                        className={settings?.execution.reboot_policy === policy ? "btn btn-primary" : "btn"}
+                        disabled={executionLoading}
+                        onClick={() =>
+                          setSettings((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  execution: { ...current.execution, reboot_policy: policy },
+                                }
+                              : current,
+                          )
+                        }
+                        type="button"
+                      >
+                        {policy}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 10 }}>
-                {(["dry-run", "apply"] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    className={item.linux_agent_mode === mode ? "btn btn-primary" : "btn"}
-                    disabled={executionLoading}
-                    onClick={() => void handleGroupExecutionModeChange(item.group_name, mode)}
-                    type="button"
-                  >
-                    {mode}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="panel section settings-card">
-        <div className="section-header">
-          <h2 className="section-title">Execucao Windows</h2>
-          <span className="muted">{settings?.execution.windows_scan_apply_enabled ? "scan habilitado" : "somente inventario"}</span>
-        </div>
-        <div className="form-grid">
-          <div className="list-item">
-            <div>
-              <div style={{ fontWeight: 700 }}>StartScan</div>
-              <div className="muted" style={{ marginTop: 4 }}>Permite scan via UsoClient.</div>
-            </div>
-            <button
-              className={settings?.execution.windows_scan_apply_enabled ? "btn btn-primary" : "btn"}
-              disabled={executionLoading}
-              onClick={() =>
-                setSettings((current) =>
-                  current
-                    ? {
-                        ...current,
-                        execution: {
-                          ...current.execution,
-                          windows_scan_apply_enabled: !current.execution.windows_scan_apply_enabled,
-                        },
-                      }
-                    : current,
-                )
-              }
-              type="button"
-            >
-              {settings?.execution.windows_scan_apply_enabled ? "Ligado" : "Desligado"}
-            </button>
-          </div>
-          <div className="list-item">
-            <div>
-              <div style={{ fontWeight: 700 }}>Download e install</div>
-              <div className="muted" style={{ marginTop: 4 }}>Permite StartDownload e StartInstall.</div>
-            </div>
-            <button
-              className={settings?.execution.windows_download_install_enabled ? "btn btn-primary" : "btn"}
-              disabled={executionLoading}
-              onClick={() =>
-                setSettings((current) =>
-                  current
-                    ? {
-                        ...current,
-                        execution: {
-                          ...current.execution,
-                          windows_download_install_enabled: !current.execution.windows_download_install_enabled,
-                        },
-                      }
-                    : current,
-                )
-              }
-              type="button"
-            >
-              {settings?.execution.windows_download_install_enabled ? "Ligado" : "Desligado"}
-            </button>
-          </div>
-          <label>
-            <span className="field-label">Timeout Windows (segundos)</span>
-            <input
-              className="input"
-              min="15"
-              onChange={(event) => setWindowsTimeoutDraft(event.target.value)}
-              type="number"
-              value={windowsTimeoutDraft}
-            />
-          </label>
-          <label>
-            <span className="field-label">Grace de reboot Windows (minutos)</span>
-            <input
-              className="input"
-              min="5"
-              onChange={(event) => setWindowsRebootGraceDraft(event.target.value)}
-              type="number"
-              value={windowsRebootGraceDraft}
-            />
-          </label>
-          <div>
-            <span className="field-label">Politica de reboot Windows</span>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              {(["manual", "notify", "maintenance-window"] as const).map((policy) => (
+              <div className="form-grid">
+                <label>
+                  <span className="field-label">
+                    Allowlist de pacotes <InfoHint text="Lista separada por virgula com padroes permitidos no apply real." />
+                  </span>
+                  <input
+                    className="input"
+                    onChange={(event) => setAllowedPatternsDraft(event.target.value)}
+                    type="text"
+                    value={allowedPatternsDraft}
+                  />
+                </label>
+                <label>
+                  <span className="field-label">
+                    Timeout de apply <InfoHint text="Tempo maximo, em segundos, para execucao do apply Linux." />
+                  </span>
+                  <input
+                    className="input"
+                    min="30"
+                    onChange={(event) => setTimeoutDraft(event.target.value)}
+                    type="number"
+                    value={timeoutDraft}
+                  />
+                </label>
+                <label>
+                  <span className="field-label">
+                    Grace de reboot Linux <InfoHint text="Tempo de tolerancia, em minutos, para reboot planejado." />
+                  </span>
+                  <input
+                    className="input"
+                    min="5"
+                    onChange={(event) => setRebootGraceDraft(event.target.value)}
+                    type="number"
+                    value={rebootGraceDraft}
+                  />
+                </label>
                 <button
-                  key={policy}
-                  className={settings?.execution.windows_reboot_policy === policy ? "btn btn-primary" : "btn"}
+                  className="btn btn-primary"
                   disabled={executionLoading}
-                  onClick={() =>
-                    setSettings((current) =>
-                      current
-                        ? {
-                            ...current,
-                            execution: { ...current.execution, windows_reboot_policy: policy },
-                          }
-                        : current,
-                    )
-                  }
+                  onClick={() => void handleExecutionGuardrailsSave("Politicas Linux salvas com sucesso.")}
                   type="button"
                 >
-                  {policy}
+                  {executionLoading ? "Salvando..." : "Salvar Linux"}
                 </button>
-              ))}
+              </div>
             </div>
-          </div>
-          <button
-            className="btn btn-primary"
-            disabled={executionLoading}
-            onClick={() => void handleExecutionGuardrailsSave()}
-            type="button"
-          >
-            {executionLoading ? "Salvando..." : "Salvar politica Windows"}
-          </button>
+          </section>
         </div>
       </section>
 
-      <section className="panel section settings-card-wide">
-        <div className="section-header">
-          <h2 className="section-title">Bootstrap e instalacao dos agentes</h2>
-          {settings ? (
-            <StatusBadge variant={settings.bootstrap.agent_bootstrap_token_is_expired ? "error" : "ok"}>
-              {settings.bootstrap.agent_bootstrap_token_is_expired ? "expirado" : "ativo"}
-            </StatusBadge>
-          ) : null}
+      <section className="settings-group settings-card-wide">
+        <div className="settings-group-header">
+          <div>
+            <p className="eyebrow">Windows</p>
+            <h2 className="section-title">Politicas Windows</h2>
+          </div>
+          <span className="muted">{settings?.execution.windows_scan_apply_enabled ? "scan habilitado" : "somente inventario"}</span>
         </div>
-        <div className="content-grid">
-          <div className="form-grid">
-            <label>
-              <span className="field-label">Bootstrap token</span>
-              <input
-                className="input"
-                onChange={(event) => setBootstrapTokenDraft(event.target.value)}
-                type="text"
-                value={bootstrapTokenDraft}
-              />
-            </label>
-            <label>
-              <span className="field-label">URL publica do servidor</span>
-              <input
-                className="input"
-                onChange={(event) => setInstallServerUrlDraft(event.target.value)}
-                type="text"
-                value={installServerUrlDraft}
-              />
-            </label>
-            <label>
-              <span className="field-label">Expiracao do token (dias)</span>
-              <input
-                className="input"
-                min="1"
-                onChange={(event) => setBootstrapExpiryDaysDraft(event.target.value)}
-                type="number"
-                value={bootstrapExpiryDaysDraft}
-              />
-            </label>
-            <button
-              className="btn btn-primary"
-              disabled={bootstrapLoading}
-              onClick={() => void handleBootstrapTokenSave()}
-              type="button"
-            >
-              {bootstrapLoading ? "Salvando..." : "Salvar bootstrap"}
-            </button>
-            <div className="muted">
-              Rotacionado em{" "}
-              {settings?.bootstrap.agent_bootstrap_token_rotated_at
-                ? formatDateTimeSaoPaulo(settings.bootstrap.agent_bootstrap_token_rotated_at)
-                : "sem registro"}
+        <div className="settings-section-grid">
+          <section className="panel section settings-tile settings-tile-wide">
+            <div className="section-header">
+              <h3 className="section-title">Execucao Windows</h3>
+              <InfoHint text="Controla scan, download, install e reboot em hosts Windows." />
             </div>
-          </div>
-          <div className="form-grid">
-            {[
-              ["Instalacao Linux", installCommand],
-              ["Atualizacao Linux", upgradeCommand],
-              ["Instalacao Windows", windowsInstallCommand],
-              ["Atualizacao Windows", windowsUpgradeCommand],
-            ].map(([label, command]) => (
-              <label key={label}>
-                <span className="field-label">{label}</span>
-                <code
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    padding: "12px 14px",
-                    border: "1px solid var(--border)",
-                    borderRadius: 12,
-                    background: "var(--surface-2)",
-                    color: "var(--text)",
-                    overflowX: "auto",
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-all",
-                  }}
+            <div className="content-grid">
+              <div className="compact-setting-list">
+                <div className="setting-row">
+                  <SettingTitle help="Permite scan controlado via UsoClient StartScan.">StartScan</SettingTitle>
+                  <button
+                    className={settings?.execution.windows_scan_apply_enabled ? "btn btn-primary" : "btn"}
+                    disabled={executionLoading}
+                    onClick={() =>
+                      setSettings((current) =>
+                        current
+                          ? {
+                              ...current,
+                              execution: {
+                                ...current.execution,
+                                windows_scan_apply_enabled: !current.execution.windows_scan_apply_enabled,
+                              },
+                            }
+                          : current,
+                      )
+                    }
+                    type="button"
+                  >
+                    {settings?.execution.windows_scan_apply_enabled ? "Ligado" : "Desligado"}
+                  </button>
+                </div>
+                <div className="setting-row">
+                  <SettingTitle help="Permite StartDownload e StartInstall nos hosts Windows.">
+                    Download e install
+                  </SettingTitle>
+                  <button
+                    className={settings?.execution.windows_download_install_enabled ? "btn btn-primary" : "btn"}
+                    disabled={executionLoading}
+                    onClick={() =>
+                      setSettings((current) =>
+                        current
+                          ? {
+                              ...current,
+                              execution: {
+                                ...current.execution,
+                                windows_download_install_enabled: !current.execution.windows_download_install_enabled,
+                              },
+                            }
+                          : current,
+                      )
+                    }
+                    type="button"
+                  >
+                    {settings?.execution.windows_download_install_enabled ? "Ligado" : "Desligado"}
+                  </button>
+                </div>
+                <div className="setting-row">
+                  <SettingTitle help="Tratamento do reboot pendente apos execucao Windows.">
+                    Politica de reboot
+                  </SettingTitle>
+                  <div className="segmented-actions">
+                    {(["manual", "notify", "maintenance-window"] as const).map((policy) => (
+                      <button
+                        key={policy}
+                        className={settings?.execution.windows_reboot_policy === policy ? "btn btn-primary" : "btn"}
+                        disabled={executionLoading}
+                        onClick={() =>
+                          setSettings((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  execution: { ...current.execution, windows_reboot_policy: policy },
+                                }
+                              : current,
+                          )
+                        }
+                        type="button"
+                      >
+                        {policy}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="form-grid">
+                <label>
+                  <span className="field-label">
+                    Timeout Windows <InfoHint text="Tempo maximo, em segundos, para comandos Windows." />
+                  </span>
+                  <input
+                    className="input"
+                    min="15"
+                    onChange={(event) => setWindowsTimeoutDraft(event.target.value)}
+                    type="number"
+                    value={windowsTimeoutDraft}
+                  />
+                </label>
+                <label>
+                  <span className="field-label">
+                    Grace de reboot Windows <InfoHint text="Tempo de tolerancia, em minutos, para reboot planejado." />
+                  </span>
+                  <input
+                    className="input"
+                    min="5"
+                    onChange={(event) => setWindowsRebootGraceDraft(event.target.value)}
+                    type="number"
+                    value={windowsRebootGraceDraft}
+                  />
+                </label>
+                <button
+                  className="btn btn-primary"
+                  disabled={executionLoading}
+                  onClick={() => void handleExecutionGuardrailsSave("Politicas Windows salvas com sucesso.")}
+                  type="button"
                 >
-                  {command}
-                </code>
-              </label>
-            ))}
-          </div>
+                  {executionLoading ? "Salvando..." : "Salvar Windows"}
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="panel section settings-tile settings-tile-wide">
+            <div className="section-header">
+              <h3 className="section-title">Comandos de instalacao</h3>
+              <InfoHint text="Comandos gerados com base na URL publica e token bootstrap configurados." />
+            </div>
+            <div className="settings-command-grid">
+              {[
+                ["Instalacao Linux", installCommand],
+                ["Atualizacao Linux", upgradeCommand],
+                ["Instalacao Windows", windowsInstallCommand],
+                ["Atualizacao Windows", windowsUpgradeCommand],
+              ].map(([label, command]) => (
+                <label key={label}>
+                  <span className="field-label">{label}</span>
+                  <code className="command-snippet">{command}</code>
+                </label>
+              ))}
+            </div>
+          </section>
         </div>
       </section>
 

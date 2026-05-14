@@ -1,7 +1,10 @@
+import type { ReactNode } from "react";
+
 type ConfirmModalProps = {
   open: boolean;
   title: string;
   description: string;
+  children?: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   confirmDisabled?: boolean;
@@ -13,6 +16,7 @@ export function ConfirmModal({
   open,
   title,
   description,
+  children,
   confirmLabel = "Confirmar",
   cancelLabel = "Cancelar",
   confirmDisabled = false,
@@ -29,6 +33,7 @@ export function ConfirmModal({
         <p className="eyebrow">Confirmacao</p>
         <h3 className="modal-title">{title}</h3>
         <p className="modal-copy">{description}</p>
+        {children ? <div className="modal-extra">{children}</div> : null}
         <div className="modal-actions">
           <button className="btn" type="button" onClick={onCancel}>
             {cancelLabel}

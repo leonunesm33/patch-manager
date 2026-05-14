@@ -19,6 +19,10 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
     title: "Agendamentos",
     subtitle: "Janelas de manutencao e politicas de execucao por grupo.",
   },
+  "/operations": {
+    title: "Operacoes",
+    subtitle: "Acoes operacionais, pendencias e acompanhamento de agentes.",
+  },
   "/reports": {
     title: "Relatorios",
     subtitle: "Historico operacional com foco em sucesso, falhas e auditoria.",
@@ -27,11 +31,29 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
     title: "Configuracoes",
     subtitle: "Politicas globais, notificacoes e defaults da plataforma.",
   },
+  "/account": {
+    title: "Minha conta",
+    subtitle: "Perfil, avatar e seguranca do usuario conectado.",
+  },
+  "/users": {
+    title: "Usuarios",
+    subtitle: "Perfis de acesso e usuarios autorizados na plataforma.",
+  },
 };
+
+function getPageMeta(pathname: string) {
+  if (pathname.startsWith("/machines/")) {
+    return {
+      title: "Inventario detalhado do host",
+      subtitle: "Inventario, jobs, execucoes e comandos operacionais de um unico host.",
+    };
+  }
+  return pageMeta[pathname] ?? pageMeta["/"];
+}
 
 export function AppShell() {
   const location = useLocation();
-  const meta = pageMeta[location.pathname] ?? pageMeta["/"];
+  const meta = getPageMeta(location.pathname);
 
   return (
     <div className="app-shell">

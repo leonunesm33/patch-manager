@@ -11,6 +11,8 @@ import { ReportsPage } from "@/features/reports/pages/reports-page";
 import { SchedulesPage } from "@/features/schedules/pages/schedules-page";
 import { OperationsPage } from "@/features/settings/pages/operations-page";
 import { SettingsPage } from "@/features/settings/pages/settings-page";
+import { AccountPage } from "@/features/users/pages/account-page";
+import { UsersAdminPage } from "@/features/users/pages/users-admin-page";
 
 export const router = createBrowserRouter([
   {
@@ -36,6 +38,8 @@ export const router = createBrowserRouter([
           { path: "operations", element: <OperationsPage /> },
           { path: "reports", element: <ReportsPage /> },
           { path: "settings", element: <SettingsPage /> },
+          { path: "account", element: <AccountPage /> },
+          { path: "users", element: <UsersAdminPage /> },
         ],
       },
     ],

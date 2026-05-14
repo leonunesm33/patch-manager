@@ -6,11 +6,6 @@ import {
   fetchMachines,
   updateMachine,
 } from "@/features/machines/api";
-import {
-  reintegrateConnectedAgent,
-  requestConnectedAgentReboot,
-  revokeConnectedAgent,
-} from "@/features/settings/api";
 import { ActionMenu } from "@/components/common/action-menu";
 import { ConfirmModal } from "@/components/common/confirm-modal";
 import { MachineOperationalDetailsPanel } from "@/features/machines/components/machine-operational-details-panel";
@@ -53,8 +48,6 @@ export function MachinesPage() {
   const [managementFilter, setManagementFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
   const [showMachineForm, setShowMachineForm] = useState(false);
-  const [selectedMachineIds, setSelectedMachineIds] = useState<string[]>([]);
-  const [batchAction, setBatchAction] = useState<"reboot" | "reintegrate" | "revoke" | null>(null);
   const [form, setForm] = useState<MachineCreate>({
     name: "",
     ip: "",
@@ -164,7 +157,6 @@ export function MachinesPage() {
     try {
       await deleteMachine(machine.id);
       setMachines((current) => current.filter((item) => item.id !== machine.id));
-      setSelectedMachineIds((current) => current.filter((item) => item !== machine.id));
       if (editingId === machine.id) {
         resetMachineForm();
       }
@@ -172,39 +164,6 @@ export function MachinesPage() {
       setFormError(err instanceof Error ? err.message : "Falha ao remover maquina.");
     } finally {
       setPendingDelete(null);
-    }
-  }
-
-  async function handleBatchAction() {
-    if (!batchAction) return;
-    const selectedManagedAgentIds = machines
-      .filter((machine) => selectedMachineIds.includes(machine.id) && machine.id.startsWith("agent-"))
-      .map((machine) => machine.id.replace(/^agent-/, ""));
-
-    if (selectedManagedAgentIds.length === 0) {
-      setBatchAction(null);
-      return;
-    }
-
-    setFormError(null);
-    setIsSubmitting(true);
-    try {
-      if (batchAction === "reboot") {
-        await Promise.all(selectedManagedAgentIds.map((agentId) => requestConnectedAgentReboot(agentId)));
-      } else if (batchAction === "reintegrate") {
-        await Promise.all(selectedManagedAgentIds.map((agentId) => reintegrateConnectedAgent(agentId)));
-      } else {
-        await Promise.all(selectedManagedAgentIds.map((agentId) => revokeConnectedAgent(agentId)));
-      }
-      setSelectedMachineIds([]);
-      setBatchAction(null);
-      await loadMachines();
-    } catch (err) {
-      setFormError(
-        err instanceof Error ? err.message : "Falha ao executar a acao em lote nas maquinas selecionadas.",
-      );
-    } finally {
-      setIsSubmitting(false);
     }
   }
 
@@ -255,10 +214,6 @@ export function MachinesPage() {
   const availablePlatforms = Array.from(new Set(machines.map((machine) => machine.platform))).sort((a, b) =>
     a.localeCompare(b),
   );
-  const selectedMachines = filteredMachines.filter((machine) => selectedMachineIds.includes(machine.id));
-  const selectedManagedMachines = selectedMachines.filter((machine) => machine.id.startsWith("agent-"));
-  const allFilteredSelected =
-    filteredMachines.length > 0 && filteredMachines.every((machine) => selectedMachineIds.includes(machine.id));
   const activeFilterCount = [
     searchTerm.trim().length > 0,
     platformFilter !== "all",
@@ -284,33 +239,6 @@ export function MachinesPage() {
             void handleDeleteMachine(pendingDelete);
           }
         }}
-      />
-      <ConfirmModal
-        open={batchAction !== null}
-        title={
-          batchAction === "reboot"
-            ? "Solicitar reboot em lote?"
-            : batchAction === "reintegrate"
-              ? "Reintegrar agentes em lote?"
-              : "Revogar agentes em lote?"
-        }
-        description={
-          batchAction === "reboot"
-            ? `${selectedManagedMachines.length} hosts gerenciados receberao uma solicitacao de reboot.`
-            : batchAction === "reintegrate"
-              ? `${selectedManagedMachines.length} hosts gerenciados voltarao para o fluxo de aprovacao do agente.`
-              : `${selectedManagedMachines.length} hosts gerenciados perderao a credencial atual do agente.`
-        }
-        confirmLabel={
-          batchAction === "reboot"
-            ? "Solicitar reboot"
-            : batchAction === "reintegrate"
-              ? "Reintegrar"
-              : "Revogar"
-        }
-        confirmDisabled={isSubmitting || selectedManagedMachines.length === 0}
-        onCancel={() => setBatchAction(null)}
-        onConfirm={() => void handleBatchAction()}
       />
       {shouldShowOperationalDetails ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Detalhes operacionais da maquina">
@@ -471,7 +399,7 @@ export function MachinesPage() {
                 </p>
               ) : null}
               <div style={{ display: "flex", gap: 10 }}>
-                <button className="btn btn-primary" type="submit" disabled={isSubmitting}>
+                <button className="btn btn-primary btn-primary-uniform" type="submit" disabled={isSubmitting}>
                   {isSubmitting ? "Salvando..." : editingId ? "Salvar alteracoes" : "Registrar maquina"}
                 </button>
                 <button className="btn" type="button" onClick={resetMachineForm}>
@@ -493,7 +421,7 @@ export function MachinesPage() {
               {showFilters ? "Ocultar filtros" : activeFilterCount > 0 ? `Filtros (${activeFilterCount})` : "Filtros"}
             </button>
             <button
-              className="btn btn-primary"
+              className="btn btn-primary btn-primary-uniform"
               onClick={() => {
                 resetMachineForm();
                 setShowMachineForm(true);
@@ -565,66 +493,9 @@ export function MachinesPage() {
         </div>
         ) : null}
 
-        <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap" }}>
-          <div className="muted">
-            {selectedMachines.length === 0
-              ? "Nenhuma maquina selecionada"
-              : `${selectedMachines.length} maquinas selecionadas, ${selectedManagedMachines.length} gerenciadas por agente`}
-          </div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button
-              className="btn"
-              disabled={selectedManagedMachines.length === 0}
-              onClick={() => setBatchAction("reboot")}
-              type="button"
-            >
-              Reboot em lote
-            </button>
-            <button
-              className="btn"
-              disabled={selectedManagedMachines.length === 0}
-              onClick={() => setBatchAction("reintegrate")}
-              type="button"
-            >
-              Reintegrar em lote
-            </button>
-            <button
-              className="btn"
-              disabled={selectedManagedMachines.length === 0}
-              onClick={() => setBatchAction("revoke")}
-              type="button"
-            >
-              Revogar em lote
-            </button>
-            <button
-              className="btn"
-              disabled={selectedMachineIds.length === 0}
-              onClick={() => setSelectedMachineIds([])}
-              type="button"
-            >
-              Limpar selecao
-            </button>
-          </div>
-        </div>
-
         <table className="table">
           <thead>
             <tr>
-              <th>
-                <input
-                  aria-label="Selecionar todas as maquinas filtradas"
-                  checked={allFilteredSelected}
-                  onChange={(event) =>
-                    setSelectedMachineIds((current) => {
-                      if (event.target.checked) {
-                        return Array.from(new Set([...current, ...filteredMachines.map((machine) => machine.id)]));
-                      }
-                      return current.filter((id) => !filteredMachines.some((machine) => machine.id === id));
-                    })
-                  }
-                  type="checkbox"
-                />
-              </th>
               <th>Host</th>
               <th>IP</th>
               <th>Plataforma</th>
@@ -640,27 +511,13 @@ export function MachinesPage() {
           <tbody>
             {!loading && filteredMachines.length === 0 ? (
               <tr>
-                <td colSpan={11} className="muted">
+                <td colSpan={10} className="muted">
                   Nenhuma maquina encontrada com os filtros atuais.
                 </td>
               </tr>
             ) : null}
             {filteredMachines.map((machine) => (
               <tr key={machine.id}>
-                <td>
-                  <input
-                    aria-label={`Selecionar maquina ${machine.name}`}
-                    checked={selectedMachineIds.includes(machine.id)}
-                    onChange={(event) =>
-                      setSelectedMachineIds((current) =>
-                        event.target.checked
-                          ? [...current, machine.id]
-                          : current.filter((item) => item !== machine.id),
-                      )
-                    }
-                    type="checkbox"
-                  />
-                </td>
                 <td style={{ fontWeight: 700 }}>{machine.name}</td>
                 <td className="code">{machine.ip}</td>
                 <td>{machine.platform}</td>

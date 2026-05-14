@@ -260,7 +260,7 @@ export function SchedulesPage() {
             </p>
           ) : null}
           <div style={{ display: "flex", gap: 10 }}>
-            <button className="btn btn-primary" type="submit" disabled={isSubmitting}>
+            <button className="btn btn-primary btn-primary-uniform" type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Salvando..." : editingId ? "Salvar alteracoes" : "Criar agendamento"}
             </button>
             <button className="btn" type="button" onClick={resetScheduleForm}>

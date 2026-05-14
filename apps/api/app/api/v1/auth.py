@@ -5,7 +5,13 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.repositories.user_repository import UserRepository
-from app.schemas.auth import LoginRequest, PasswordChangeRequest, TokenResponse, UserResponse
+from app.schemas.auth import (
+    LoginRequest,
+    PasswordChangeRequest,
+    TokenResponse,
+    UserProfileUpdateRequest,
+    UserResponse,
+)
 from app.services.auth_service import AuthError, AuthService
 
 router = APIRouter()
@@ -36,6 +42,24 @@ def login(
 @router.get("/me", response_model=UserResponse)
 def me(current_user: Annotated[UserResponse, Depends(get_current_user)]) -> UserResponse:
     return current_user
+
+
+@router.patch("/me", response_model=UserResponse)
+def update_me(
+    payload: UserProfileUpdateRequest,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserResponse, Depends(get_current_user)],
+) -> UserResponse:
+    repository = UserRepository(db)
+    user = repository.get_by_username(current_user.username)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    user.full_name = payload.full_name.strip()
+    user.avatar_initials = payload.avatar_initials.strip().upper() if payload.avatar_initials else None
+    user.avatar_color = payload.avatar_color.strip() if payload.avatar_color else None
+    updated_user = repository.update(user)
+    return UserResponse.model_validate(updated_user)
 
 
 @router.post("/change-password", response_model=UserResponse)

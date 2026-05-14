@@ -12,6 +12,14 @@ class UserRepository:
         query = select(UserModel).where(UserModel.username == username)
         return self.session.scalar(query)
 
+    def get_by_id(self, user_id: str) -> UserModel | None:
+        query = select(UserModel).where(UserModel.id == user_id)
+        return self.session.scalar(query)
+
+    def list_all(self) -> list[UserModel]:
+        query = select(UserModel).order_by(UserModel.username)
+        return list(self.session.scalars(query))
+
     def add(self, user: UserModel) -> UserModel:
         self.session.add(user)
         self.session.flush()
