@@ -1,5 +1,5 @@
 export type PatchSeverity = "low" | "medium" | "high" | "critical" | "important" | "optional";
-export type PatchCategory = "security" | "bugfix" | "feature" | "stability" | "other";
+export type PatchCategory = "security" | "bugfix" | "driver" | "firmware" | "feature" | "stability" | "other";
 
 export type PatchAffectedMachine = {
   id: string;
@@ -13,6 +13,7 @@ export type PatchAffectedMachine = {
 
 export type PatchApproval = {
   id: string;
+  display_name: string | null;
   target: string;
   severity: PatchSeverity;
   category: PatchCategory | string;
@@ -26,6 +27,7 @@ export type PatchApproval = {
 
 export type PatchCreate = {
   id: string;
+  display_name: string | null;
   target: string;
   severity: PatchSeverity;
   category: PatchCategory | string;

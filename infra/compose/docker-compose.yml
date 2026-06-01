@@ -30,9 +30,12 @@ services:
 
   api:
     build:
-      context: ../../apps/api
+      context: ../..
+      dockerfile: apps/api/Dockerfile
     container_name: patch-manager-api
     restart: always
+    ports:
+      - "${PATCH_MANAGER_API_PORT:-8000}:8000"
     env_file:
       - ../env/api.env
     depends_on:

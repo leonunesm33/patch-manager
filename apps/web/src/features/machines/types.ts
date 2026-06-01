@@ -69,3 +69,15 @@ export type MachineCreate = {
   pending_patches: number;
   risk: "critical" | "important" | "optional";
 };
+
+export type MachineGroup = {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string | null;
+};
+
+export type MachineGroupCreate = {
+  name: string;
+  description: string | null;
+};

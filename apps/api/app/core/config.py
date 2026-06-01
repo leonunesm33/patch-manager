@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     cors_allow_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     cors_allow_origin_regex: str = r"https?://(localhost|127\.0\.0\.1)(:\d+)?$"
     scheduler_autostart: bool = True
-    scheduler_interval_seconds: int = 300
+    scheduler_interval_seconds: int = 30
     worker_autostart: bool = True
     worker_interval_seconds: int = 30
     agent_bootstrap_token: str = "patch-manager-bootstrap-token"

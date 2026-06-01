@@ -42,6 +42,8 @@ function getCategoryLabel(category: string) {
   const labels: Record<string, string> = {
     security: "seguranca",
     bugfix: "bug",
+    driver: "driver",
+    firmware: "firmware",
     feature: "funcional",
     stability: "estabilidade",
     other: "outros",
@@ -64,6 +66,7 @@ export function PatchApprovalsPage() {
   const [showPatchForm, setShowPatchForm] = useState(false);
   const [form, setForm] = useState<PatchCreate>({
     id: "",
+    display_name: "",
     target: "Windows Servers",
     severity: "high",
     category: "security",
@@ -77,6 +80,7 @@ export function PatchApprovalsPage() {
     setActionError(null);
     setForm({
       id: "",
+      display_name: "",
       target: "Windows Servers",
       severity: "high",
       category: "security",
@@ -140,8 +144,8 @@ export function PatchApprovalsPage() {
 
     try {
       const patch = editingId
-        ? await updatePatch(editingId, { ...form, machines: Number(form.machines) })
-        : await createPatch({ ...form, machines: Number(form.machines) });
+        ? await updatePatch(editingId, { ...form, display_name: form.display_name || form.id, machines: Number(form.machines) })
+        : await createPatch({ ...form, display_name: form.display_name || form.id, machines: Number(form.machines) });
 
       setPatches((current) =>
         [...current.filter((item) => item.id !== editingId && item.id !== patch.id), patch].sort(
@@ -164,6 +168,7 @@ export function PatchApprovalsPage() {
     setActionError(null);
     setForm({
       id: patch.id,
+      display_name: patch.display_name || patch.id,
       target: patch.target,
       severity: patch.severity,
       category: patch.category,
@@ -195,7 +200,7 @@ export function PatchApprovalsPage() {
         title="Excluir patch"
         description={
           pendingDelete
-            ? `Deseja realmente excluir o patch "${pendingDelete.id}"? Esta acao remove o item da fila de aprovacao.`
+            ? `Deseja realmente excluir o patch "${pendingDelete.display_name || pendingDelete.id}"? Esta acao remove o item da fila de aprovacao.`
             : ""
         }
         confirmLabel="Excluir"
@@ -268,14 +273,19 @@ export function PatchApprovalsPage() {
             {!loading && patches.length === 0 ? (
               <tr>
                 <td colSpan={8} className="muted">
-                  Nenhum patch encontrado para o filtro atual.
+                  {machineIdFilter
+                    ? "Este host reportou pendencias no resumo, mas ainda nao enviou o inventario detalhado de patches. Atualize ou reinicie o agente e aguarde o proximo check-in."
+                    : "Nenhum patch encontrado para o filtro atual."}
                 </td>
               </tr>
             ) : null}
             {patches.map((patch) => (
               <tr key={patch.id}>
                 <td>
-                  <div className="code">{patch.id}</div>
+                  <div style={{ fontWeight: 700 }}>{patch.display_name || patch.id}</div>
+                  <div className="muted" style={{ marginTop: 4 }}>
+                    ID: <span className="code">{patch.id}</span>
+                  </div>
                   <div className="muted" style={{ marginTop: 4 }}>
                     {patch.target}
                   </div>
@@ -359,6 +369,17 @@ export function PatchApprovalsPage() {
                 />
               </label>
               <label>
+                <span className="field-label">Nome do patch</span>
+                <input
+                  className="input"
+                  value={form.display_name ?? ""}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, display_name: event.target.value }))
+                  }
+                  placeholder="Ex.: Intel Driver Update (2.3.20303.5058)"
+                />
+              </label>
+              <label>
                 <span className="field-label">Escopo</span>
                 <select
                   className="select"
@@ -405,6 +426,8 @@ export function PatchApprovalsPage() {
                 >
                   <option value="security">seguranca</option>
                   <option value="bugfix">bug</option>
+                  <option value="driver">driver</option>
+                  <option value="firmware">firmware</option>
                   <option value="stability">estabilidade</option>
                   <option value="feature">funcional</option>
                   <option value="other">outros</option>

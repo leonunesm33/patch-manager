@@ -1,12 +1,12 @@
-from base64 import b64encode
+from hashlib import sha1
 import json
 import secrets
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import (
@@ -25,6 +25,7 @@ from app.models.agent_inventory_item import AgentInventoryItemModel
 from app.models.agent_inventory_snapshot import AgentInventorySnapshotModel
 from app.models.execution_log import ExecutionLogModel
 from app.models.machine import MachineModel
+from app.models.patch import PatchModel
 from app.repositories.agent_command_repository import AgentCommandRepository
 from app.repositories.agent_credential_repository import AgentCredentialRepository
 from app.repositories.agent_enrollment_repository import AgentEnrollmentRepository
@@ -90,8 +91,90 @@ def _classify_job_failure(error_message: str | None) -> str | None:
     return "execution_error"
 
 
+def _inventory_patch_id(agent_id: str, item: AgentInventoryItemModel) -> str:
+    raw_identifier = (item.kb_id or item.identifier or item.title).strip()
+    safe_identifier = raw_identifier.replace("/", "-").replace("\\", "-").replace(" ", "-")
+    safe_agent_id = agent_id.replace("/", "-").replace("\\", "-")
+    candidate = f"{safe_identifier}@{safe_agent_id}"
+    if len(candidate) <= 120:
+        return candidate
+
+    digest = sha1(candidate.encode("utf-8")).hexdigest()[:10]
+    return f"{safe_identifier[:80]}-{digest}@{safe_agent_id[:24]}"
+
+
+def _inventory_patch_category(item: AgentInventoryItemModel) -> str:
+    source = (item.source or "").lower()
+    summary = (item.summary or "").lower()
+    title = item.title.lower()
+    if item.security_only:
+        return "security"
+    if "driver" in source or "driver" in summary or "driver" in title:
+        return "driver"
+    if "firmware" in source or "firmware" in summary or "firmware" in title:
+        return "firmware"
+    return "other"
+
+
+def _inventory_patch_severity(item: AgentInventoryItemModel) -> str:
+    category = _inventory_patch_category(item)
+    if item.security_only:
+        return "high"
+    if category in {"driver", "firmware"}:
+        return "medium"
+    return "medium"
+
+
+def _sync_inventory_patches(
+    db: Session,
+    agent_id: str,
+    managed_machine_id: str,
+    pending_items: list[AgentInventoryItemModel],
+) -> None:
+    patch_repository = PatchRepository(db)
+    target = f"machine:{managed_machine_id}"
+    expected_patch_ids: set[str] = set()
+
+    for item in pending_items:
+        patch_id = _inventory_patch_id(agent_id, item)
+        expected_patch_ids.add(patch_id)
+        severity = _inventory_patch_severity(item)
+        category = _inventory_patch_category(item)
+        existing = patch_repository.get_by_id(patch_id)
+        patch = existing or PatchModel(
+            id=patch_id,
+            display_name=item.title,
+            target=target,
+            severity=severity,
+            category=category,
+            machines=1,
+            release_date=date.today(),
+            approval_status="pending",
+            reviewed_by=None,
+            reviewed_at=None,
+        )
+        patch.display_name = item.title or patch_id
+        patch.target = target
+        patch.severity = severity
+        patch.category = category
+        patch.machines = 1
+        patch.release_date = date.today()
+        patch_repository.update(patch)
+
+    for stale_patch in patch_repository.list_by_target(target):
+        if stale_patch.id not in expected_patch_ids and stale_patch.approval_status == "pending":
+            patch_repository.delete(stale_patch)
+
+
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[5]
+    current_path = Path(__file__).resolve()
+    for candidate in (current_path.parent, *current_path.parents):
+        if (
+            (candidate / "apps" / "agent-linux" / "agent" / "main.py").exists()
+            and (candidate / "apps" / "agent-windows" / "agent" / "main.py").exists()
+        ):
+            return candidate
+    raise RuntimeError("Unable to locate agent source files")
 
 
 def _read_agent_linux_file(relative_path: str) -> str:
@@ -102,19 +185,44 @@ def _read_agent_windows_file(relative_path: str) -> str:
     return (_repo_root() / "apps" / "agent-windows" / relative_path).read_text(encoding="utf-8")
 
 
-def _collect_agent_windows_payloads(subdir: str) -> list[tuple[str, str]]:
-    root = _repo_root() / "apps" / "agent-windows" / subdir
-    if not root.exists() or not root.is_dir():
-        return []
+def _windows_agent_exe_path() -> Path:
+    exe_path = _repo_root() / "apps" / "agent-windows" / "dist" / "PatchManagerAgentWindows.exe"
+    if not exe_path.exists() or not exe_path.is_file():
+        raise RuntimeError("Windows agent standalone executable not found")
+    return exe_path
 
-    payloads: list[tuple[str, str]] = []
-    for file_path in sorted(root.rglob("*")):
-        if not file_path.is_file():
-            continue
-        relative_path = file_path.relative_to((_repo_root() / "apps" / "agent-windows")).as_posix()
-        encoded = b64encode(file_path.read_bytes()).decode("ascii")
-        payloads.append((relative_path, encoded))
-    return payloads
+
+def _windows_agent_download_block(server_url: str) -> str:
+    agent_exe_url = f"{server_url.rstrip('/')}/api/v1/agents/install/windows-agent.exe"
+    return f"""
+$AgentExeUrl = "{agent_exe_url}"
+$DistRoot = Join-Path $InstallRoot "dist"
+$AgentExeTarget = Join-Path $DistRoot "PatchManagerAgentWindows.exe"
+
+function Save-UrlFile {{
+  param(
+    [Parameter(Mandatory = $true)][string]$Url,
+    [Parameter(Mandatory = $true)][string]$Target
+  )
+
+  $null = New-Item -ItemType Directory -Force -Path ([System.IO.Path]::GetDirectoryName($Target))
+  try {{
+    Invoke-WebRequest -Uri $Url -OutFile $Target -UseBasicParsing
+  }} catch {{
+    $client = New-Object System.Net.WebClient
+    $client.DownloadFile($Url, $Target)
+  }}
+
+  if (-not (Test-Path $Target)) {{
+    throw "Falha ao baixar $Url para $Target."
+  }}
+  if ((Get-Item $Target).Length -lt 1000000) {{
+    throw "Arquivo baixado parece incompleto: $Target."
+  }}
+}}
+
+Save-UrlFile -Url $AgentExeUrl -Target $AgentExeTarget
+"""
 
 
 def _build_linux_installer_script(server_url: str, bootstrap_token: str) -> str:
@@ -182,6 +290,9 @@ PATCH_MANAGER_ENABLE_REAL_APPLY=false
 PATCH_MANAGER_ALLOW_SECURITY_ONLY=false
 PATCH_MANAGER_ALLOWED_PACKAGE_PATTERNS=
 PATCH_MANAGER_APT_APPLY_TIMEOUT=900
+PATCH_MANAGER_ENABLE_HOST_REBOOT=true
+PATCH_MANAGER_SIMULATE_HOST_REBOOT=false
+PATCH_MANAGER_REBOOT_COMMAND_TIMEOUT=30
 PATCH_MANAGER_HEARTBEAT_INTERVAL=10
 PATCH_MANAGER_IDLE_SLEEP=5
 PATCH_MANAGER_INVENTORY_INTERVAL=60
@@ -272,7 +383,10 @@ for REQUIRED_KEY in \
   PATCH_MANAGER_ENABLE_REAL_APPLY=false \
   PATCH_MANAGER_ALLOW_SECURITY_ONLY=false \
   PATCH_MANAGER_ALLOWED_PACKAGE_PATTERNS= \
-  PATCH_MANAGER_APT_APPLY_TIMEOUT=900; do
+  PATCH_MANAGER_APT_APPLY_TIMEOUT=900 \
+  PATCH_MANAGER_ENABLE_HOST_REBOOT=true \
+  PATCH_MANAGER_SIMULATE_HOST_REBOOT=false \
+  PATCH_MANAGER_REBOOT_COMMAND_TIMEOUT=30; do
   KEY_NAME="${{REQUIRED_KEY%%=*}}"
   if ! grep -q "^${{KEY_NAME}}=" "${{ENV_TARGET}}"; then
     sudo tee -a "${{ENV_TARGET}}" >/dev/null <<EOF
@@ -319,18 +433,7 @@ def _build_windows_installer_script(server_url: str, bootstrap_token: str) -> st
         )
 
     joined_blocks = "\n\n".join(file_blocks)
-    payload_blocks = []
-    for relative_path, encoded in _collect_agent_windows_payloads("runtime") + _collect_agent_windows_payloads("dist"):
-        payload_blocks.append(
-            "\n".join(
-                [
-                    f'$target = Join-Path $InstallRoot "{relative_path.replace("/", "\\")}"',
-                    "$null = New-Item -ItemType Directory -Force -Path ([System.IO.Path]::GetDirectoryName($target))",
-                    f'[System.IO.File]::WriteAllBytes($target, [System.Convert]::FromBase64String("{encoded}"))',
-                ]
-            )
-        )
-    joined_payload_blocks = "\n\n".join(payload_blocks)
+    agent_download_block = _windows_agent_download_block(server_url)
     return f"""param()
 $ErrorActionPreference = 'Stop'
 
@@ -355,7 +458,7 @@ $null = New-Item -ItemType Directory -Force -Path "C:\\ProgramData\\PatchManager
 
 {joined_blocks}
 
-{joined_payload_blocks}
+{agent_download_block}
 
 @"
 PATCH_MANAGER_API=$ServerUrl/api/v1/agents
@@ -367,7 +470,8 @@ PATCH_MANAGER_EXECUTION_MODE=dry-run
 PATCH_MANAGER_ENABLE_WINDOWS_SCAN_APPLY=false
 PATCH_MANAGER_ENABLE_WINDOWS_DOWNLOAD_INSTALL=false
 PATCH_MANAGER_WINDOWS_COMMAND_TIMEOUT=60
-PATCH_MANAGER_ENABLE_WINDOWS_HOST_REBOOT=false
+PATCH_MANAGER_ENABLE_WINDOWS_HOST_REBOOT=true
+PATCH_MANAGER_SIMULATE_WINDOWS_HOST_REBOOT=false
 PATCH_MANAGER_WINDOWS_REBOOT_COMMAND_TIMEOUT=30
 PATCH_MANAGER_HEARTBEAT_INTERVAL=10
 PATCH_MANAGER_IDLE_SLEEP=5
@@ -429,18 +533,7 @@ def _build_windows_upgrade_script(server_url: str) -> str:
         )
 
     joined_blocks = "\n\n".join(file_blocks)
-    payload_blocks = []
-    for relative_path, encoded in _collect_agent_windows_payloads("runtime") + _collect_agent_windows_payloads("dist"):
-        payload_blocks.append(
-            "\n".join(
-                [
-                    f'$target = Join-Path $InstallRoot "{relative_path.replace("/", "\\")}"',
-                    "$null = New-Item -ItemType Directory -Force -Path ([System.IO.Path]::GetDirectoryName($target))",
-                    f'[System.IO.File]::WriteAllBytes($target, [System.Convert]::FromBase64String("{encoded}"))',
-                ]
-            )
-        )
-    joined_payload_blocks = "\n\n".join(payload_blocks)
+    agent_download_block = _windows_agent_download_block(server_url)
     return f"""param()
 $ErrorActionPreference = 'Stop'
 
@@ -475,7 +568,7 @@ Start-Sleep -Seconds 1
 
 {joined_blocks}
 
-{joined_payload_blocks}
+{agent_download_block}
 
 if (-not (Test-Path $EnvTarget)) {{
 @"
@@ -494,7 +587,13 @@ if ($existing -notmatch 'PATCH_MANAGER_WINDOWS_COMMAND_TIMEOUT=') {{
   Add-Content -Path $EnvTarget -Value "PATCH_MANAGER_WINDOWS_COMMAND_TIMEOUT=60"
 }}
 if ($existing -notmatch 'PATCH_MANAGER_ENABLE_WINDOWS_HOST_REBOOT=') {{
-  Add-Content -Path $EnvTarget -Value "PATCH_MANAGER_ENABLE_WINDOWS_HOST_REBOOT=false"
+  Add-Content -Path $EnvTarget -Value "PATCH_MANAGER_ENABLE_WINDOWS_HOST_REBOOT=true"
+}} else {{
+  (Get-Content $EnvTarget) -replace '^PATCH_MANAGER_ENABLE_WINDOWS_HOST_REBOOT=.*$', 'PATCH_MANAGER_ENABLE_WINDOWS_HOST_REBOOT=true' |
+    Set-Content -Path $EnvTarget -Encoding UTF8
+}}
+if ($existing -notmatch 'PATCH_MANAGER_SIMULATE_WINDOWS_HOST_REBOOT=') {{
+  Add-Content -Path $EnvTarget -Value "PATCH_MANAGER_SIMULATE_WINDOWS_HOST_REBOOT=false"
 }}
 if ($existing -notmatch 'PATCH_MANAGER_WINDOWS_REBOOT_COMMAND_TIMEOUT=') {{
   Add-Content -Path $EnvTarget -Value "PATCH_MANAGER_WINDOWS_REBOOT_COMMAND_TIMEOUT=30"
@@ -552,6 +651,19 @@ def download_windows_installer(
 @router.get("/install/windows-upgrade.ps1", response_class=PlainTextResponse)
 def download_windows_upgrade_script(server_url: str) -> str:
     return _build_windows_upgrade_script(server_url)
+
+
+@router.get("/install/windows-agent.exe")
+def download_windows_agent_executable() -> FileResponse:
+    try:
+        exe_path = _windows_agent_exe_path()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return FileResponse(
+        exe_path,
+        media_type="application/octet-stream",
+        filename="PatchManagerAgentWindows.exe",
+    )
 
 
 @router.post("/enroll", response_model=AgentEnrollmentStatusResponse)
@@ -1149,46 +1261,45 @@ def submit_agent_inventory(
             reboot_scheduled_at=preserved_reboot_scheduled_at,
         )
     )
+    pending_inventory_items = [
+        AgentInventoryItemModel(
+            agent_id=payload.agent_id,
+            platform=payload.platform,
+            item_type="pending",
+            identifier=item.identifier,
+            title=item.title,
+            current_version=item.current_version,
+            target_version=item.target_version,
+            source=item.source,
+            summary=item.summary,
+            kb_id=item.kb_id,
+            security_only=item.security_only,
+            installed_at=item.installed_at,
+            sort_order=index,
+        )
+        for index, item in enumerate(payload.pending_updates)
+    ]
+    installed_inventory_items = [
+        AgentInventoryItemModel(
+            agent_id=payload.agent_id,
+            platform=payload.platform,
+            item_type="installed",
+            identifier=item.identifier,
+            title=item.title,
+            current_version=item.current_version,
+            target_version=item.target_version,
+            source=item.source,
+            summary=item.summary,
+            kb_id=item.kb_id,
+            security_only=item.security_only,
+            installed_at=item.installed_at,
+            sort_order=index,
+        )
+        for index, item in enumerate(payload.installed_updates)
+    ]
     AgentInventoryItemRepository(db).replace_for_agent(
         payload.agent_id,
-        [
-            *[
-                AgentInventoryItemModel(
-                    agent_id=payload.agent_id,
-                    platform=payload.platform,
-                    item_type="pending",
-                    identifier=item.identifier,
-                    title=item.title,
-                    current_version=item.current_version,
-                    target_version=item.target_version,
-                    source=item.source,
-                    summary=item.summary,
-                    kb_id=item.kb_id,
-                    security_only=item.security_only,
-                    installed_at=item.installed_at,
-                    sort_order=index,
-                )
-                for index, item in enumerate(payload.pending_updates)
-            ],
-            *[
-                AgentInventoryItemModel(
-                    agent_id=payload.agent_id,
-                    platform=payload.platform,
-                    item_type="installed",
-                    identifier=item.identifier,
-                    title=item.title,
-                    current_version=item.current_version,
-                    target_version=item.target_version,
-                    source=item.source,
-                    summary=item.summary,
-                    kb_id=item.kb_id,
-                    security_only=item.security_only,
-                    installed_at=item.installed_at,
-                    sort_order=index,
-                )
-                for index, item in enumerate(payload.installed_updates)
-            ],
-        ],
+        [*pending_inventory_items, *installed_inventory_items],
     )
 
     machine_repository = MachineRepository(db)
@@ -1223,6 +1334,8 @@ def submit_agent_inventory(
         machine.last_check_in = datetime.now(UTC)
         machine.risk = risk
         machine_repository.update(machine)
+
+    _sync_inventory_patches(db, payload.agent_id, managed_machine_id, pending_inventory_items)
 
     return {"status": "ok"}
 
@@ -1334,6 +1447,7 @@ def submit_command_result(
 
     settings_service = SettingsService(db)
     command_repository = AgentCommandRepository(db)
+    snapshot_repository = AgentInventorySnapshotRepository(db)
     command = command_repository.get_by_id(command_id)
     if command is None:
         raise HTTPException(status_code=404, detail="Command not found")
@@ -1342,17 +1456,31 @@ def submit_command_result(
 
     normalized_result = payload.result.strip().lower()
     command_repository.complete(command, normalized_result, payload.message)
+    command_kind = command.command_type.strip().lower()
+    event_prefix = "scheduled_reboot" if command_kind == "scheduled_reboot" else "manual_reboot"
     if normalized_result == "applied":
-        settings_service.record_operational_event(
-            "linux_manual_reboot_completed",
+        snapshot_repository.update_post_patch_state(
             payload.agent_id,
-            payload.message or f"Reboot manual aceito pelo agente {payload.agent_id}.",
+            post_patch_state="reboot-scheduled",
+            post_patch_message=payload.message or f"Reboot aceito pelo agente {payload.agent_id}.",
+            reboot_scheduled_at=datetime.now(UTC),
+        )
+        settings_service.record_operational_event(
+            f"{event_prefix}_completed",
+            payload.agent_id,
+            payload.message or f"Reboot aceito pelo agente {payload.agent_id}.",
         )
     else:
-        settings_service.record_operational_event(
-            "linux_manual_reboot_failed",
+        snapshot_repository.update_post_patch_state(
             payload.agent_id,
-            payload.message or f"Falha ao executar reboot manual no agente {payload.agent_id}.",
+            post_patch_state="reboot-failed",
+            post_patch_message=payload.message or f"Falha ao executar reboot no agente {payload.agent_id}.",
+            reboot_scheduled_at=None,
+        )
+        settings_service.record_operational_event(
+            f"{event_prefix}_failed",
+            payload.agent_id,
+            payload.message or f"Falha ao executar reboot no agente {payload.agent_id}.",
         )
     return {"status": "acknowledged", "command_id": command_id}
 

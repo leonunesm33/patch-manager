@@ -9,12 +9,14 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_operator, require_viewer
 from app.models.machine import MachineModel
+from app.models.machine_group import MachineGroupModel
 from app.repositories.agent_credential_repository import AgentCredentialRepository
 from app.repositories.agent_command_repository import AgentCommandRepository
 from app.repositories.execution_log_repository import ExecutionLogRepository
 from app.repositories.patch_job_repository import PatchJobRepository
 from app.repositories.agent_inventory_snapshot_repository import AgentInventorySnapshotRepository
 from app.repositories.machine_repository import MachineRepository
+from app.repositories.machine_group_repository import MachineGroupRepository
 from app.schemas.auth import UserResponse
 from app.schemas.agent import AgentInventoryDetailItem, AgentInventoryDetailResponse
 from app.repositories.agent_inventory_item_repository import AgentInventoryItemRepository
@@ -26,6 +28,7 @@ from app.schemas.machine import (
     MachineJobSummary,
     MachineOperationalDetails,
 )
+from app.schemas.machine_group import MachineGroup, MachineGroupCreate
 from app.services.agent_registry_service import agent_registry_service
 from app.services.settings_service import SettingsService
 
@@ -70,6 +73,63 @@ MOCK_MACHINES = [
         risk="critical",
     ),
 ]
+
+
+@router.get("/groups", response_model=list[MachineGroup])
+def list_machine_groups(
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[UserResponse, Depends(require_viewer)],
+) -> list[MachineGroup]:
+    group_repository = MachineGroupRepository(db)
+    groups = group_repository.list_all()
+    if groups:
+        return [MachineGroup.model_validate(group) for group in groups]
+
+    names = MachineRepository(db).list_groups()
+    return [
+        MachineGroup(
+            id=f"group-{index + 1}",
+            name=name,
+            description="Grupo detectado no inventario de maquinas.",
+            created_at=None,
+        )
+        for index, name in enumerate(names)
+    ]
+
+
+@router.post("/groups", response_model=MachineGroup, status_code=201)
+def create_machine_group(
+    payload: MachineGroupCreate,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[UserResponse, Depends(require_operator)],
+) -> MachineGroup:
+    repository = MachineGroupRepository(db)
+    normalized_name = payload.name.strip()
+    if repository.get_by_name(normalized_name) is not None:
+        raise HTTPException(status_code=409, detail="Machine group already exists")
+
+    group = repository.add(
+        MachineGroupModel(
+            id=f"group-{uuid4().hex[:8]}",
+            name=normalized_name,
+            description=payload.description,
+        )
+    )
+    return MachineGroup.model_validate(group)
+
+
+@router.delete("/groups/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_machine_group(
+    group_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[UserResponse, Depends(require_operator)],
+) -> Response:
+    repository = MachineGroupRepository(db)
+    group = repository.get_by_id(group_id)
+    if group is None:
+        raise HTTPException(status_code=404, detail="Machine group not found")
+    repository.delete(group)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("", response_model=list[Machine])

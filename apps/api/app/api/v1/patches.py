@@ -18,6 +18,7 @@ router = APIRouter()
 MOCK_PATCHES = [
     PatchApproval(
         id="KB5034441",
+        display_name="KB5034441",
         target="Windows Servers",
         severity="critical",
         category="security",
@@ -28,6 +29,7 @@ MOCK_PATCHES = [
     ),
     PatchApproval(
         id="openssl-3.0.2-0ubuntu1.14",
+        display_name="openssl 3.0.2-0ubuntu1.14",
         target="Ubuntu Production",
         severity="high",
         category="security",
@@ -41,6 +43,9 @@ MOCK_PATCHES = [
 
 def _machine_matches_patch_target(machine: MachineModel, target: str) -> bool:
     normalized_target = target.lower()
+    if normalized_target.startswith("machine:"):
+        return machine.id.lower() == normalized_target.removeprefix("machine:")
+
     platform = machine.platform.lower()
     environment = machine.environment.lower()
     group = machine.group.lower()
@@ -91,6 +96,7 @@ def _patch_response(patch: PatchModel, machines: list[MachineModel]) -> PatchApp
     affected = [machine for machine in machines if _machine_matches_patch_target(machine, patch.target)]
     return PatchApproval(
         id=patch.id,
+        display_name=patch.display_name or patch.id,
         target=patch.target,
         severity=patch.severity,
         category=patch.category,
@@ -145,6 +151,7 @@ def create_patch(
     patch = repository.update(
         PatchModel(
             id=payload.id,
+            display_name=payload.display_name or payload.id,
             target=payload.target,
             severity=payload.severity,
             category=payload.category,
@@ -174,6 +181,7 @@ def update_patch(
         raise HTTPException(status_code=409, detail="Patch already exists")
 
     patch.id = payload.id
+    patch.display_name = payload.display_name or payload.id
     patch.target = payload.target
     patch.severity = payload.severity
     patch.category = payload.category

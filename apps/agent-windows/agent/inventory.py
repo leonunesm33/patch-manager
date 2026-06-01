@@ -50,7 +50,7 @@ $installedUpdates = @()
 try {
   $session = New-Object -ComObject Microsoft.Update.Session
   $searcher = $session.CreateUpdateSearcher()
-  $result = $searcher.Search("IsInstalled=0 and Type='Software'")
+  $result = $searcher.Search("IsInstalled=0 and IsHidden=0")
   $pendingCount = $result.Updates.Count
   $titles = @()
   for ($i = 0; $i -lt [Math]::Min($result.Updates.Count, 25); $i++) {
@@ -77,7 +77,7 @@ try {
       title = $update.Title
       current_version = $null
       target_version = $null
-      source = $source
+      source = if ($update.Type -eq 2) { 'windows-update-driver' } else { $source }
       summary = ($categories -join '; ')
       kb_id = $kbId
       security_only = (($categories -match 'security').Count -gt 0) -or ($update.Title -match 'Security')

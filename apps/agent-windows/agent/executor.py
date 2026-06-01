@@ -82,6 +82,8 @@ def handle_post_apply_reboot(
         return False, f"Politica de reboot Windows desconhecida: {reboot_policy}."
     if not config.enable_host_reboot:
         return False, "Host reboot esta desabilitado neste agente Windows."
+    if config.simulate_host_reboot:
+        return True, f"Simulacao de reboot Windows para daqui {reboot_grace_minutes} minutos. Nenhum shutdown foi executado."
 
     seconds = max(reboot_grace_minutes * 60, 60)
     code, output = _run(
@@ -91,6 +93,31 @@ def handle_post_apply_reboot(
     if code == 0:
         return True, f"Reboot Windows agendado para daqui {reboot_grace_minutes} minutos."
     return False, output or "Falha ao agendar reboot no host Windows."
+
+
+def execute_reboot_command(
+    command: dict[str, object],
+    config: AgentConfig,
+) -> tuple[str, str | None]:
+    command_type = str(command.get("command_type", "")).strip().lower()
+    if command_type not in {"reboot_now", "scheduled_reboot"}:
+        return "failed", f"Unsupported command type: {command.get('command_type')}"
+    if not config.enable_host_reboot:
+        return "failed", "Host reboot esta desabilitado neste agente Windows."
+    if config.simulate_host_reboot:
+        if command_type == "scheduled_reboot":
+            return "applied", "Simulacao de reboot Windows agendado pela janela de manutencao. Nenhum shutdown foi executado."
+        return "applied", "Simulacao de reboot Windows manual. Nenhum shutdown foi executado."
+
+    code, output = _run(
+        ["shutdown.exe", "/r", "/t", "60", "/c", "Patch Manager scheduled reboot"],
+        timeout=config.reboot_command_timeout_seconds,
+    )
+    if code == 0:
+        if command_type == "scheduled_reboot":
+            return "applied", "Reboot Windows agendado pela janela de manutencao para 1 minuto a partir de agora."
+        return "applied", "Reboot Windows manual agendado para 1 minuto a partir de agora."
+    return "failed", output or "Falha ao agendar reboot no host Windows."
 
 
 def execute_windows_job(

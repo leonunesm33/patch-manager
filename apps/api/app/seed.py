@@ -7,6 +7,7 @@ from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.models.agent_credential import AgentCredentialModel
 from app.models.machine import MachineModel
+from app.models.machine_group import MachineGroupModel
 from app.models.patch import PatchModel
 from app.models.schedule import ScheduleModel
 from app.models.user import UserModel
@@ -82,11 +83,22 @@ def seed_initial_data() -> None:
                 ]
             )
 
+        if session.scalar(select(MachineGroupModel.id).limit(1)) is None:
+            session.add_all(
+                [
+                    MachineGroupModel(id="group-web-servers", name="Web Servers", description="Servidores web Windows."),
+                    MachineGroupModel(id="group-database", name="Database", description="Servidores de banco de dados."),
+                    MachineGroupModel(id="group-linux-production", name="Linux Production", description="Hosts Linux de producao."),
+                    MachineGroupModel(id="group-agent-managed", name="Agent Managed", description="Hosts registrados automaticamente por agente."),
+                ]
+            )
+
         if session.scalar(select(PatchModel.id).limit(1)) is None:
             session.add_all(
                 [
                     PatchModel(
                         id="KB5034441",
+                        display_name="KB5034441",
                         target="Windows Servers",
                         severity="critical",
                         machines=8,
@@ -95,6 +107,7 @@ def seed_initial_data() -> None:
                     ),
                     PatchModel(
                         id="openssl-3.0.2-0ubuntu1.14",
+                        display_name="openssl 3.0.2-0ubuntu1.14",
                         target="Ubuntu Production",
                         severity="important",
                         machines=5,
@@ -110,16 +123,26 @@ def seed_initial_data() -> None:
                     ScheduleModel(
                         id="sched-1",
                         name="Janela Semanal Linux",
-                        scope="Ubuntu Production",
-                        cron_label="Toda quarta, 02:00",
-                        reboot_policy="Somente se necessario",
+                        scope="SO: Linux",
+                        scope_type="os",
+                        scope_value="Linux",
+                        cron_label="Semanal, 02:00",
+                        install_time="02:00",
+                        reboot_time="03:00",
+                        recurrence="weekly",
+                        reboot_policy="Reiniciar se necessario as 03:00",
                     ),
                     ScheduleModel(
                         id="sched-2",
                         name="Patches Criticos Windows",
-                        scope="Windows Servers",
-                        cron_label="Diariamente, 03:00",
-                        reboot_policy="Sempre reiniciar",
+                        scope="SO: Windows",
+                        scope_type="os",
+                        scope_value="Windows",
+                        cron_label="Diaria, 03:00",
+                        install_time="03:00",
+                        reboot_time="04:00",
+                        recurrence="daily",
+                        reboot_policy="Sempre reiniciar as 04:00",
                     ),
                 ]
             )

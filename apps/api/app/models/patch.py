@@ -10,6 +10,7 @@ class PatchModel(Base):
     __tablename__ = "patches"
 
     id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    display_name: Mapped[str | None] = mapped_column(String(500), nullable=True)
     target: Mapped[str] = mapped_column(String(120), index=True)
     severity: Mapped[str] = mapped_column(String(30), index=True)
     category: Mapped[str] = mapped_column(String(40), default="security", index=True)

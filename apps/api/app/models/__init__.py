@@ -4,6 +4,7 @@ from app.models.agent_credential import AgentCredentialModel
 from app.models.agent_inventory_snapshot import AgentInventorySnapshotModel
 from app.models.execution_log import ExecutionLogModel
 from app.models.machine import MachineModel
+from app.models.machine_group import MachineGroupModel
 from app.models.patch import PatchModel
 from app.models.patch_job import PatchJobModel
 from app.models.schedule import ScheduleModel
@@ -17,6 +18,7 @@ __all__ = [
     "AgentInventorySnapshotModel",
     "ExecutionLogModel",
     "MachineModel",
+    "MachineGroupModel",
     "PatchJobModel",
     "PatchModel",
     "ScheduleModel",

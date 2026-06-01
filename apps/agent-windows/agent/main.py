@@ -13,7 +13,7 @@ if CURRENT_DIR not in sys.path:
 
 from api_client import post_json
 from config import load_config, save_env_values
-from executor import execute_windows_job, handle_post_apply_reboot
+from executor import execute_reboot_command, execute_windows_job, handle_post_apply_reboot
 from inventory import collect_inventory
 from logger import configure_logging
 
@@ -76,7 +76,28 @@ def claim_job(config) -> dict[str, object] | None:
     return response if isinstance(response, dict) else None
 
 
-def submit_result(config, job_id: str, result: str, execution_mode: str, error_message: str | None = None) -> None:
+def poll_command(config) -> dict[str, object] | None:
+    response = post_json(
+        config,
+        "/commands/next",
+        {
+            "agent_id": config.agent_id,
+            "platform": config.platform,
+        },
+    )
+    return response if isinstance(response, dict) else None
+
+
+def submit_result(
+    config,
+    job_id: str,
+    result: str,
+    execution_mode: str,
+    reboot_required: bool | None,
+    reboot_scheduled: bool | None,
+    reboot_message: str | None,
+    error_message: str | None = None,
+) -> None:
     post_json(
         config,
         f"/jobs/{job_id}/result",
@@ -84,8 +105,22 @@ def submit_result(config, job_id: str, result: str, execution_mode: str, error_m
             "agent_id": config.agent_id,
             "result": result,
             "execution_mode": execution_mode,
-            "reboot_required": False,
+            "reboot_required": reboot_required,
+            "reboot_scheduled": reboot_scheduled,
+            "reboot_message": reboot_message,
             "error_message": error_message,
+        },
+    )
+
+
+def submit_command_result(config, command_id: str, result: str, message: str | None = None) -> None:
+    post_json(
+        config,
+        f"/commands/{command_id}/result",
+        {
+            "agent_id": config.agent_id,
+            "result": result,
+            "message": message,
         },
     )
 
@@ -198,6 +233,19 @@ def main() -> None:
             if now - last_inventory_sync >= config.inventory_interval_seconds:
                 send_inventory(config)
                 last_inventory_sync = now
+
+            command = poll_command(config)
+            if command and command.get("id"):
+                logger.info("Processing command %s of type %s", command["id"], command.get("command_type"))
+                result, message = execute_reboot_command(command, config)
+                submit_command_result(config, str(command["id"]), result, message)
+                logger.info(
+                    "Finished command %s with result %s%s",
+                    command["id"],
+                    result,
+                    f" | {message}" if message else "",
+                )
+                continue
 
             job = claim_job(config)
             if job and job.get("id"):

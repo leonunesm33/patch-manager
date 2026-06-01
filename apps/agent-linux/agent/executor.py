@@ -26,7 +26,7 @@ def _run(command: list[str], timeout: int = 20) -> tuple[int, str]:
 
 
 def _derive_package_name(patch_id: str) -> str:
-    for separator in ("=", "_", ":"):
+    for separator in ("@", "=", "_", ":"):
         if separator in patch_id:
             return patch_id.split(separator, 1)[0]
     parts = patch_id.split("-")
@@ -116,6 +116,8 @@ def handle_post_apply_reboot(
         return False, f"Politica de reboot desconhecida: {reboot_policy}."
     if config is None or not config.enable_host_reboot:
         return False, "Host reboot esta desabilitado neste agente."
+    if config.simulate_host_reboot:
+        return True, f"Simulacao de reboot Linux para daqui {reboot_grace_minutes} minutos. Nenhum shutdown foi executado."
 
     code, output = _run(
         ["shutdown", "-r", f"+{reboot_grace_minutes}"],
@@ -130,16 +132,23 @@ def execute_manual_reboot_command(
     command: dict[str, object],
     config: AgentConfig | None,
 ) -> tuple[str, str | None]:
-    if str(command.get("command_type", "")).strip().lower() != "reboot_now":
+    command_type = str(command.get("command_type", "")).strip().lower()
+    if command_type not in {"reboot_now", "scheduled_reboot"}:
         return "failed", f"Unsupported command type: {command.get('command_type')}"
     if config is None or not config.enable_host_reboot:
         return "failed", "Host reboot esta desabilitado neste agente."
+    if config.simulate_host_reboot:
+        if command_type == "scheduled_reboot":
+            return "applied", "Simulacao de reboot Linux agendado pela janela de manutencao. Nenhum shutdown foi executado."
+        return "applied", "Simulacao de reboot Linux manual. Nenhum shutdown foi executado."
 
     code, output = _run(
         ["shutdown", "-r", "+1"],
         timeout=config.reboot_command_timeout_seconds,
     )
     if code == 0:
+        if command_type == "scheduled_reboot":
+            return "applied", "Reboot agendado pela janela de manutencao para 1 minuto a partir de agora."
         return "applied", "Reboot manual agendado para 1 minuto a partir de agora."
     return "failed", output or "Falha ao agendar reboot manual no host."
 

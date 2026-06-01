@@ -8,6 +8,7 @@ class PatchCycleRunResponse(BaseModel):
     jobs_processed: int
     executions_created: int
     failed_executions: int
+    reboot_commands_enqueued: int = 0
 
 
 class PatchJobProcessResponse(BaseModel):

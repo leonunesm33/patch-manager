@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import {
   createMachine,
+  createMachineGroup,
   deleteMachine,
+  deleteMachineGroup,
+  fetchMachineGroups,
   fetchMachineOperationalDetails,
   fetchMachines,
   updateMachine,
@@ -9,7 +12,12 @@ import {
 import { ActionMenu } from "@/components/common/action-menu";
 import { ConfirmModal } from "@/components/common/confirm-modal";
 import { MachineOperationalDetailsPanel } from "@/features/machines/components/machine-operational-details-panel";
-import type { Machine, MachineCreate, MachineOperationalDetails } from "@/features/machines/types";
+import type {
+  Machine,
+  MachineCreate,
+  MachineGroup,
+  MachineOperationalDetails,
+} from "@/features/machines/types";
 import { StatusBadge } from "@/components/common/status-badge";
 import { formatDateTimeSaoPaulo } from "@/lib/datetime";
 import { useNavigate } from "react-router-dom";
@@ -32,12 +40,15 @@ function getPostPatchVariant(state: string | null) {
 export function MachinesPage() {
   const navigate = useNavigate();
   const [machines, setMachines] = useState<Machine[]>([]);
+  const [groups, setGroups] = useState<MachineGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Machine | null>(null);
+  const [pendingGroupDelete, setPendingGroupDelete] = useState<MachineGroup | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [groupFeedback, setGroupFeedback] = useState<string | null>(null);
   const [inventoryAgentId, setInventoryAgentId] = useState<string | null>(null);
   const [machineDetails, setMachineDetails] = useState<MachineOperationalDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
@@ -47,7 +58,9 @@ export function MachinesPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [managementFilter, setManagementFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
+  const [showGroupManager, setShowGroupManager] = useState(false);
   const [showMachineForm, setShowMachineForm] = useState(false);
+  const [groupForm, setGroupForm] = useState({ name: "", description: "" });
   const [form, setForm] = useState<MachineCreate>({
     name: "",
     ip: "",
@@ -80,9 +93,13 @@ export function MachinesPage() {
 
     async function loadMachines() {
       try {
-        const response = await fetchMachines();
+        const [machineResponse, groupResponse] = await Promise.all([
+          fetchMachines(),
+          fetchMachineGroups(),
+        ]);
         if (!active) return;
-        setMachines(response);
+        setMachines(machineResponse);
+        setGroups(groupResponse);
       } catch (err) {
         if (!active) return;
         setError(err instanceof Error ? err.message : "Falha ao carregar maquinas.");
@@ -101,8 +118,12 @@ export function MachinesPage() {
   }, []);
 
   async function loadMachines() {
-    const response = await fetchMachines();
-    setMachines(response);
+    const [machineResponse, groupResponse] = await Promise.all([
+      fetchMachines(),
+      fetchMachineGroups(),
+    ]);
+    setMachines(machineResponse);
+    setGroups(groupResponse);
   }
 
   async function handleSubmitMachine(event: React.FormEvent<HTMLFormElement>) {
@@ -164,6 +185,38 @@ export function MachinesPage() {
       setFormError(err instanceof Error ? err.message : "Falha ao remover maquina.");
     } finally {
       setPendingDelete(null);
+    }
+  }
+
+  async function handleCreateGroup(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setGroupFeedback(null);
+    try {
+      const group = await createMachineGroup({
+        name: groupForm.name,
+        description: groupForm.description || null,
+      });
+      setGroups((current) =>
+        [...current.filter((item) => item.id !== group.id), group].sort((a, b) =>
+          a.name.localeCompare(b.name),
+        ),
+      );
+      setGroupForm({ name: "", description: "" });
+      setGroupFeedback(`Grupo ${group.name} criado.`);
+    } catch (err) {
+      setGroupFeedback(err instanceof Error ? err.message : "Falha ao criar grupo.");
+    }
+  }
+
+  async function handleDeleteGroup(group: MachineGroup) {
+    try {
+      await deleteMachineGroup(group.id);
+      setGroups((current) => current.filter((item) => item.id !== group.id));
+      setGroupFeedback(`Grupo ${group.name} removido.`);
+    } catch (err) {
+      setGroupFeedback(err instanceof Error ? err.message : "Falha ao remover grupo.");
+    } finally {
+      setPendingGroupDelete(null);
     }
   }
 
@@ -240,6 +293,89 @@ export function MachinesPage() {
           }
         }}
       />
+      <ConfirmModal
+        open={pendingGroupDelete !== null}
+        title="Excluir grupo"
+        description={
+          pendingGroupDelete
+            ? `Deseja remover o grupo "${pendingGroupDelete.name}"? As maquinas nao serao excluidas.`
+            : ""
+        }
+        confirmLabel="Excluir"
+        onCancel={() => setPendingGroupDelete(null)}
+        onConfirm={() => {
+          if (pendingGroupDelete) {
+            void handleDeleteGroup(pendingGroupDelete);
+          }
+        }}
+      />
+      {showGroupManager ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Grupos de maquinas">
+          <div className="modal-card modal-card-form">
+            <div className="modal-header">
+              <div>
+                <p className="eyebrow">Organizacao</p>
+                <h3 className="modal-title">Grupos de maquinas</h3>
+                <p className="modal-copy">
+                  Crie e remova grupos usados para organizar maquinas e direcionar agendamentos.
+                </p>
+              </div>
+              <button className="btn" type="button" onClick={() => setShowGroupManager(false)}>
+                Fechar
+              </button>
+            </div>
+
+            <form className="form-grid" onSubmit={handleCreateGroup}>
+              <label>
+                <span className="field-label">Nome do grupo</span>
+                <input
+                  className="input"
+                  value={groupForm.name}
+                  onChange={(event) => setGroupForm((current) => ({ ...current, name: event.target.value }))}
+                  placeholder="Ex.: Workstations Financeiro"
+                />
+              </label>
+              <label>
+                <span className="field-label">Descricao</span>
+                <input
+                  className="input"
+                  value={groupForm.description}
+                  onChange={(event) =>
+                    setGroupForm((current) => ({ ...current, description: event.target.value }))
+                  }
+                  placeholder="Opcional"
+                />
+              </label>
+              <button className="btn btn-primary btn-primary-uniform" type="submit">
+                Criar grupo
+              </button>
+            </form>
+
+            {groupFeedback ? <p className="muted">{groupFeedback}</p> : null}
+
+            <div className="list" style={{ marginTop: 16 }}>
+              {groups.length === 0 ? (
+                <div className="list-item">
+                  <div className="muted">Nenhum grupo cadastrado.</div>
+                </div>
+              ) : null}
+              {groups.map((group) => (
+                <div className="list-item" key={group.id}>
+                  <div>
+                    <div style={{ fontWeight: 700 }}>{group.name}</div>
+                    <div className="muted" style={{ marginTop: 4 }}>
+                      {group.description || "Sem descricao"}
+                    </div>
+                  </div>
+                  <button className="btn btn-danger" type="button" onClick={() => setPendingGroupDelete(group)}>
+                    Remover
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
       {shouldShowOperationalDetails ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Detalhes operacionais da maquina">
           <div className="modal-card modal-card-wide">
@@ -419,6 +555,9 @@ export function MachinesPage() {
             </span>
             <button className="btn" onClick={() => setShowFilters((current) => !current)} type="button">
               {showFilters ? "Ocultar filtros" : activeFilterCount > 0 ? `Filtros (${activeFilterCount})` : "Filtros"}
+            </button>
+            <button className="btn" onClick={() => setShowGroupManager(true)} type="button">
+              Grupos
             </button>
             <button
               className="btn btn-primary btn-primary-uniform"

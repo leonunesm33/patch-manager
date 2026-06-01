@@ -18,6 +18,7 @@ class PatchApproval(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    display_name: str | None = None
     target: str
     severity: str
     category: str = "security"
@@ -31,6 +32,7 @@ class PatchApproval(BaseModel):
 
 class PatchCreate(BaseModel):
     id: str
+    display_name: str | None = None
     target: str
     severity: str
     category: str = "security"

@@ -9,12 +9,14 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY apps/api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY alembic.ini .
-COPY alembic ./alembic
-COPY app ./app
+COPY apps/api/alembic.ini .
+COPY apps/api/alembic ./alembic
+COPY apps/api/app ./app
+COPY apps/agent-linux ./apps/agent-linux
+COPY apps/agent-windows ./apps/agent-windows
 
 EXPOSE 8000
 

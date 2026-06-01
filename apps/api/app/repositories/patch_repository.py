@@ -14,8 +14,16 @@ class PatchRepository:
     def get_by_id(self, patch_id: str) -> PatchModel | None:
         return self.session.get(PatchModel, patch_id)
 
+    def list_by_target(self, target: str) -> list[PatchModel]:
+        statement = select(PatchModel).where(PatchModel.target == target)
+        return list(self.session.scalars(statement))
+
     def update(self, patch: PatchModel) -> PatchModel:
         self.session.add(patch)
         self.session.commit()
         self.session.refresh(patch)
         return patch
+
+    def delete(self, patch: PatchModel) -> None:
+        self.session.delete(patch)
+        self.session.commit()

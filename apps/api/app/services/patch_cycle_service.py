@@ -1,12 +1,19 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time
+from hashlib import sha1
+import json
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
+from app.models.agent_command import AgentCommandModel
 from app.models.execution_log import ExecutionLogModel
 from app.models.machine import MachineModel
 from app.models.patch import PatchModel
 from app.models.patch_job import PatchJobModel
+from app.models.schedule import ScheduleModel
+from app.repositories.agent_command_repository import AgentCommandRepository
+from app.repositories.agent_inventory_snapshot_repository import AgentInventorySnapshotRepository
 from app.repositories.execution_log_repository import ExecutionLogRepository
 from app.repositories.machine_repository import MachineRepository
 from app.repositories.patch_job_repository import PatchJobRepository
@@ -23,6 +30,8 @@ class PatchCycleService:
         self.patch_repository = PatchRepository(session)
         self.schedule_repository = ScheduleRepository(session)
         self.execution_log_repository = ExecutionLogRepository(session)
+        self.agent_command_repository = AgentCommandRepository(session)
+        self.snapshot_repository = AgentInventorySnapshotRepository(session)
 
     def run_once(self) -> PatchCycleRunResponse:
         enqueue_result = self.enqueue_jobs()
@@ -34,6 +43,7 @@ class PatchCycleService:
             jobs_processed=process_result.jobs_processed,
             executions_created=process_result.executions_created,
             failed_executions=process_result.failed_executions,
+            reboot_commands_enqueued=enqueue_result.reboot_commands_enqueued,
         )
 
     def enqueue_jobs(self) -> PatchCycleRunResponse:
@@ -42,6 +52,7 @@ class PatchCycleService:
         ]
         schedules = self.schedule_repository.list_all()
         machines = self.machine_repository.list_all()
+        now = datetime.now(ZoneInfo("America/Sao_Paulo"))
 
         matched_schedules = 0
         enqueued_jobs: list[PatchJobModel] = []
@@ -50,14 +61,15 @@ class PatchCycleService:
             related_schedules = [
                 schedule
                 for schedule in schedules
-                if schedule.scope.strip().lower() == patch.target.strip().lower()
+                if self._is_install_window_due(schedule, now)
+                and self._select_job_machines(schedule, patch, machines)
             ]
             if related_schedules:
                 matched_schedules += len(related_schedules)
 
             for schedule in related_schedules:
-                for machine in self._select_target_machines(machines, patch.target):
-                    if self.patch_job_repository.exists_open_job(schedule.id, machine.id, patch.id):
+                for machine in self._select_job_machines(schedule, patch, machines):
+                    if self.patch_job_repository.exists_job(schedule.id, machine.id, patch.id):
                         continue
                     enqueued_jobs.append(
                         PatchJobModel(
@@ -76,6 +88,12 @@ class PatchCycleService:
         if enqueued_jobs:
             self.patch_job_repository.add_many(enqueued_jobs)
 
+        reboot_commands_enqueued = self.enqueue_due_reboot_commands(
+            schedules=schedules,
+            machines=machines,
+            now=now,
+        )
+
         return PatchCycleRunResponse(
             schedules_matched=matched_schedules,
             approved_patches=len(approved_patches),
@@ -83,7 +101,68 @@ class PatchCycleService:
             jobs_processed=0,
             executions_created=0,
             failed_executions=0,
+            reboot_commands_enqueued=reboot_commands_enqueued,
         )
+
+    def enqueue_due_reboot_commands(
+        self,
+        *,
+        schedules: list[ScheduleModel] | None = None,
+        machines: list[MachineModel] | None = None,
+        now: datetime | None = None,
+    ) -> int:
+        schedules = schedules if schedules is not None else self.schedule_repository.list_all()
+        machines = machines if machines is not None else self.machine_repository.list_all()
+        now = now or datetime.now(ZoneInfo("America/Sao_Paulo"))
+        commands: list[AgentCommandModel] = []
+
+        for schedule in schedules:
+            reboot_policy = self._normalize_reboot_policy(schedule.reboot_policy)
+            if reboot_policy == "never" or not self._is_reboot_window_due(schedule, now):
+                continue
+
+            period_key = self._schedule_period_key(schedule, now, use_reboot=True)
+            for machine in self._select_schedule_machines(schedule, machines):
+                agent_id = self._agent_id_from_machine(machine)
+                if agent_id is None:
+                    continue
+                if reboot_policy == "if-needed" and not self._machine_needs_reboot(agent_id):
+                    continue
+
+                command_id = self._scheduled_reboot_command_id(schedule.id, agent_id, period_key)
+                if self.agent_command_repository.get_by_id(command_id) is not None:
+                    continue
+
+                commands.append(
+                    AgentCommandModel(
+                        id=command_id,
+                        agent_id=agent_id,
+                        command_type="scheduled_reboot",
+                        status="pending",
+                        requested_by="scheduler",
+                        message=f"Reboot agendado pela janela {schedule.name}.",
+                        payload_json=json.dumps(
+                            {
+                                "schedule_id": schedule.id,
+                                "schedule_name": schedule.name,
+                                "machine_id": machine.id,
+                                "machine_name": machine.name,
+                                "scheduled_for": period_key,
+                                "reboot_policy": reboot_policy,
+                            }
+                        ),
+                    )
+                )
+                self.snapshot_repository.update_post_patch_state(
+                    agent_id,
+                    post_patch_state="reboot-scheduled",
+                    post_patch_message=f"Reboot enfileirado pela janela {schedule.name}.",
+                    reboot_scheduled_at=datetime.now(UTC),
+                )
+
+        for command in commands:
+            self.agent_command_repository.add(command)
+        return len(commands)
 
     def process_pending_jobs(self) -> PatchJobProcessResponse:
         machines = self.machine_repository.list_all()
@@ -223,11 +302,138 @@ class PatchCycleService:
         target: str,
     ) -> list[MachineModel]:
         target_normalized = target.strip().lower()
+        if target_normalized.startswith("machine:"):
+            machine_id = target_normalized.removeprefix("machine:")
+            return [machine for machine in machines if machine.id.lower() == machine_id]
         if "windows" in target_normalized:
             return [machine for machine in machines if machine.platform.lower() == "windows"]
         if "ubuntu" in target_normalized:
             return [machine for machine in machines if machine.platform.lower() == "ubuntu"]
         return machines
+
+    def _select_schedule_machines(
+        self,
+        schedule: ScheduleModel,
+        machines: list[MachineModel],
+    ) -> list[MachineModel]:
+        scope_type = (schedule.scope_type or "group").strip().lower()
+        scope_value = (schedule.scope_value or schedule.scope).strip().lower()
+        if scope_type == "machine":
+            return [machine for machine in machines if machine.id.lower() == scope_value]
+        if scope_type == "group":
+            return [machine for machine in machines if machine.group.lower() == scope_value]
+        if scope_type == "os":
+            if scope_value == "windows":
+                return [machine for machine in machines if machine.platform.lower() == "windows"]
+            if scope_value == "linux":
+                return [
+                    machine
+                    for machine in machines
+                    if machine.platform.lower() in {"ubuntu", "debian", "rhel", "linux"}
+                ]
+        return self._select_target_machines(machines, schedule.scope)
+
+    def _select_job_machines(
+        self,
+        schedule: ScheduleModel,
+        patch: PatchModel,
+        machines: list[MachineModel],
+    ) -> list[MachineModel]:
+        patch_machines = {machine.id for machine in self._select_target_machines(machines, patch.target)}
+        schedule_machines = self._select_schedule_machines(schedule, machines)
+        return [machine for machine in schedule_machines if machine.id in patch_machines]
+
+    def _is_install_window_due(self, schedule: ScheduleModel, now: datetime) -> bool:
+        return self._is_schedule_window_due(
+            schedule.recurrence,
+            schedule.install_date,
+            schedule.install_time,
+            now,
+        )
+
+    def _is_reboot_window_due(self, schedule: ScheduleModel, now: datetime) -> bool:
+        if not schedule.reboot_time:
+            return False
+        return self._is_schedule_window_due(
+            schedule.recurrence,
+            schedule.reboot_date or schedule.install_date,
+            schedule.reboot_time,
+            now,
+        )
+
+    def _is_schedule_window_due(
+        self,
+        recurrence: str | None,
+        anchor_date: date | None,
+        scheduled_time: str | None,
+        now: datetime,
+    ) -> bool:
+        if not scheduled_time:
+            return False
+
+        parsed_time = self._parse_time(scheduled_time)
+        if parsed_time is None:
+            return False
+
+        recurrence_value = (recurrence or "weekly").strip().lower()
+        anchor = anchor_date or now.date()
+        scheduled_at = datetime.combine(now.date(), parsed_time, tzinfo=now.tzinfo)
+        if scheduled_at > now:
+            return False
+
+        if recurrence_value == "once":
+            return now.date() == anchor
+        if recurrence_value == "daily":
+            return now.date() >= anchor
+        if recurrence_value == "weekly":
+            return now.date() >= anchor and now.weekday() == anchor.weekday()
+        if recurrence_value == "monthly":
+            return now.date() >= anchor and now.day == anchor.day
+        return False
+
+    def _schedule_period_key(self, schedule: ScheduleModel, now: datetime, *, use_reboot: bool) -> str:
+        scheduled_time = schedule.reboot_time if use_reboot else schedule.install_time
+        recurrence_value = (schedule.recurrence or "weekly").strip().lower()
+        if recurrence_value == "once":
+            scheduled_date = schedule.reboot_date if use_reboot else schedule.install_date
+            return f"{scheduled_date or now.date()}T{scheduled_time}"
+        if recurrence_value == "monthly":
+            return f"{now:%Y-%m}T{scheduled_time}"
+        if recurrence_value == "weekly":
+            return f"{now:%G-W%V}T{scheduled_time}"
+        return f"{now:%Y-%m-%d}T{scheduled_time}"
+
+    def _parse_time(self, value: str) -> time | None:
+        try:
+            return time.fromisoformat(value)
+        except ValueError:
+            return None
+
+    def _normalize_reboot_policy(self, reboot_policy: str | None) -> str:
+        normalized = (reboot_policy or "").strip().lower()
+        if "nao" in normalized or "não" in normalized or normalized == "never":
+            return "never"
+        if "sempre" in normalized or normalized == "always":
+            return "always"
+        return "if-needed"
+
+    def _agent_id_from_machine(self, machine: MachineModel) -> str | None:
+        if not machine.id.startswith("agent-"):
+            return None
+        return machine.id.removeprefix("agent-")
+
+    def _machine_needs_reboot(self, agent_id: str) -> bool:
+        snapshot = self.snapshot_repository.get_by_agent_id(agent_id)
+        if snapshot is None:
+            return False
+        return bool(
+            snapshot.reboot_required
+            or snapshot.post_patch_state in {"reboot-required", "reboot-scheduled"}
+        )
+
+    def _scheduled_reboot_command_id(self, schedule_id: str, agent_id: str, period_key: str) -> str:
+        digest = sha1(f"{schedule_id}:{agent_id}:{period_key}:reboot".encode("utf-8")).hexdigest()[:18]
+        return f"cmd-reboot-{digest}"
 
     def _estimate_duration_seconds(self, machine: MachineModel, patch: PatchModel) -> int:
         return 90 + ((len(machine.name) + len(patch.id)) % 6) * 37

@@ -81,3 +81,13 @@ class PatchJobRepository:
             )
         )
         return bool(self.session.scalar(statement))
+
+    def exists_job(self, schedule_id: str, machine_id: str, patch_id: str) -> bool:
+        statement: Select[tuple[int]] = select(func.count(PatchJobModel.id)).where(
+            and_(
+                PatchJobModel.schedule_id == schedule_id,
+                PatchJobModel.machine_id == machine_id,
+                PatchJobModel.patch_id == patch_id,
+            )
+        )
+        return bool(self.session.scalar(statement))
