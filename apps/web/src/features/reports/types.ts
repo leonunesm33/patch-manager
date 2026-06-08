@@ -16,6 +16,7 @@ export type PatchCycleRunResponse = {
   jobs_processed: number;
   executions_created: number;
   failed_executions: number;
+  reboot_commands_enqueued: number;
 };
 
 export type PatchJobProcessResponse = {

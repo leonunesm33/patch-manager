@@ -13,6 +13,7 @@ What already works:
 - connected-agent visibility in the frontend
 - Windows job claim and result submission
 - controlled Windows execution flow with `dry-run`, `StartScan`, and optional `StartDownload` plus `StartInstall`
+- scheduled reboot command handling, with safe simulation mode and real reboot guarded by environment flags
 - launcher-based runtime resolution through:
   - `dist\PatchManagerAgentWindows.exe`
   - `runtime\python.exe`
@@ -21,8 +22,8 @@ What already works:
 What still needs more maturity:
 
 - full Windows Update catalog by KB/package in the UI
-- post-install reboot policy and reboot execution
 - detailed installed-update history by host
+- signed production release pipeline for the packaged Windows agent
 
 ## Prerequisites
 
@@ -181,7 +182,7 @@ If the host reports inventory correctly, the backend snapshot layer is working a
 In Patch Manager:
 
 1. approve a Windows patch in `Patches`
-2. enqueue jobs in `Relatorios`
+2. enqueue jobs in `Operacoes`
 3. let the Windows agent claim the job
 4. confirm the result in `Relatorios`
 
@@ -191,6 +192,45 @@ Expected result:
 - the agent column is populated
 - the result returns as `applied` or `failed`
 - dashboard and reports reflect the execution
+
+## Scheduled Reboot Validation
+
+Reboot execution is intentionally guarded. Validate the installed environment file before running a test:
+
+```powershell
+Get-Content C:\ProgramData\PatchManager\agent-windows.env
+```
+
+For safe homologation without rebooting the workstation:
+
+```env
+PATCH_MANAGER_ENABLE_WINDOWS_HOST_REBOOT=true
+PATCH_MANAGER_SIMULATE_WINDOWS_HOST_REBOOT=true
+```
+
+For a real reboot test, only after explicit approval:
+
+```env
+PATCH_MANAGER_ENABLE_WINDOWS_HOST_REBOOT=true
+PATCH_MANAGER_SIMULATE_WINDOWS_HOST_REBOOT=false
+```
+
+Then restart the scheduled task:
+
+```powershell
+Stop-ScheduledTask -TaskName PatchManagerAgentWindows
+Start-ScheduledTask -TaskName PatchManagerAgentWindows
+```
+
+In the panel:
+
+1. create or edit a schedule targeting the Windows machine
+2. set a future reboot date/time
+3. choose `Sempre reiniciar` when the test is specifically about reboot
+4. wait at least one scheduler interval after the configured time
+5. validate the command/result in `Operacoes` and `Relatorios`
+
+If nothing happens, inspect API scheduler logs and the local agent log before changing the schedule. Reusing a time that was already processed can be ignored by deduplication, so use a new future time for each test.
 
 ## Current Homologation Interpretation
 
@@ -202,11 +242,11 @@ This homologation already validates:
 - scheduled-task based execution
 - inventory submission and snapshot persistence
 - end-to-end Windows job orchestration
+- scheduled reboot orchestration with simulation and guarded real execution
 - upgrade of an already-installed Windows agent
 - recovery after credential revocation
 
 This homologation does not yet validate:
 
-- automatic reboot execution
 - detailed Windows update history by KB in the UI
 - a full production-grade packaging pipeline with signed releases

@@ -36,3 +36,23 @@ Fluxo:
 - agente revogado pode ser reaberto para aprovacao
 - agente rejeitado pode ser reaberto na fila
 - agente parado aparece separado no painel
+
+## Reboot controlado
+
+Agentes podem receber comandos de reboot agendado quando a politica permitir. Para homologacao, valide as flags antes de testar:
+
+Windows:
+
+```env
+PATCH_MANAGER_ENABLE_WINDOWS_HOST_REBOOT=true
+PATCH_MANAGER_SIMULATE_WINDOWS_HOST_REBOOT=true
+```
+
+Linux:
+
+```env
+PATCH_MANAGER_ENABLE_HOST_REBOOT=true
+PATCH_MANAGER_SIMULATE_HOST_REBOOT=true
+```
+
+Somente desative simulacao em hosts de homologacao preparados e depois de confirmar com o operador.

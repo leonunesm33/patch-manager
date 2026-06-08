@@ -62,8 +62,13 @@ chmod +x /opt/patch-manager/deploy/central/smoke-test.sh
 - Linux e Windows possuem politica de reboot separada
 - `apply` real continua protegido por guardrails
 - hosts com reboot pendente ou agendado aparecem no dashboard e em operacoes
+- testes de reboot devem usar simulacao quando possivel e somente executar reboot real com confirmacao explicita
 
 ## Perfis de acesso
-- `admin`: configuracoes globais, bootstrap token, mudancas sensiveis
-- `operator`: operacao diaria, aprovacoes, agendamentos, execucoes e acoes nos hosts
-- `viewer`: leitura de dashboard, relatorios, maquinas e status
+- `admin`: gerencia usuarios, perfis, configuracoes globais, bootstrap token e mudancas sensiveis
+- `user`: operacao diaria autorizada, aprovacoes, agendamentos, execucoes, relatorios e acompanhamento de hosts
+
+## Relatorios e exportacao
+- `Relatorios` concentra historico de jobs, execucoes, falhas e guardrails
+- exportacoes disponiveis: CSV, JSON, HTML, PDF via impressao do navegador e XLS compativel com Excel
+- acoes de fila como gerar jobs e processar ciclo ficam em `Operacoes`

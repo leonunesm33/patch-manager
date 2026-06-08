@@ -7,6 +7,16 @@ import { formatDateTimeSaoPaulo } from "@/lib/datetime";
 import { fetchDashboard } from "@/features/dashboard/api";
 import type { DashboardResponse } from "@/features/dashboard/types";
 import {
+  fetchPatchJobs,
+  processPatchJobs,
+  runPatchCycle,
+} from "@/features/reports/api";
+import type {
+  PatchCycleRunResponse,
+  PatchJobItem,
+  PatchJobProcessResponse,
+} from "@/features/reports/types";
+import {
   approvePendingEnrollment,
   fetchConnectedAgents,
   fetchRecentAgentCommands,
@@ -31,6 +41,7 @@ import type {
 export function OperationsPage() {
   const navigate = useNavigate();
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
+  const [patchJobs, setPatchJobs] = useState<PatchJobItem[]>([]);
   const [connectedAgents, setConnectedAgents] = useState<ConnectedAgent[]>([]);
   const [pendingEnrollments, setPendingEnrollments] = useState<PendingAgentEnrollment[]>([]);
   const [rejectedEnrollments, setRejectedEnrollments] = useState<RejectedAgentEnrollment[]>([]);
@@ -40,6 +51,8 @@ export function OperationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionFeedback, setActionFeedback] = useState<{ tone: "ok" | "warn" | "error"; message: string } | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [cycleResult, setCycleResult] = useState<PatchCycleRunResponse | null>(null);
+  const [processResult, setProcessResult] = useState<PatchJobProcessResponse | null>(null);
   const [selectedPendingAgents, setSelectedPendingAgents] = useState<string[]>([]);
   const [selectedRebootAgents, setSelectedRebootAgents] = useState<string[]>([]);
   const [selectedConnectedAgents, setSelectedConnectedAgents] = useState<string[]>([]);
@@ -54,6 +67,7 @@ export function OperationsPage() {
       rejectedResult,
       revokedResult,
       commandsResult,
+      jobsResult,
     ] = await Promise.allSettled([
       fetchDashboard(),
       fetchConnectedAgents(),
@@ -61,6 +75,7 @@ export function OperationsPage() {
       fetchRejectedEnrollments(),
       fetchRevokedAgents(),
       fetchRecentAgentCommands(),
+      fetchPatchJobs(),
     ]);
 
     if (dashboardResult.status === "fulfilled") {
@@ -85,6 +100,10 @@ export function OperationsPage() {
 
     if (commandsResult.status === "fulfilled") {
       setRecentCommands(commandsResult.value);
+    }
+
+    if (jobsResult.status === "fulfilled") {
+      setPatchJobs(jobsResult.value);
     }
   }
 
@@ -356,8 +375,52 @@ export function OperationsPage() {
     }
   }
 
+  async function handleRunPatchCycle() {
+    setError(null);
+    setActionFeedback(null);
+    setActionLoadingId("run-patch-cycle");
+    try {
+      const response = await runPatchCycle();
+      setCycleResult(response);
+      await load();
+      setActionFeedback({
+        tone: response.jobs_enqueued > 0 || response.reboot_commands_enqueued > 0 ? "ok" : "warn",
+        message:
+          response.jobs_enqueued > 0 || response.reboot_commands_enqueued > 0
+            ? `${response.jobs_enqueued} jobs e ${response.reboot_commands_enqueued} comandos de reboot enfileirados.`
+            : "Ciclo executado, mas nada novo foi enfileirado.",
+      });
+    } catch (err) {
+      setActionFeedback({ tone: "error", message: err instanceof Error ? err.message : "Falha ao gerar jobs agora." });
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  async function handleProcessPatchQueue() {
+    setError(null);
+    setActionFeedback(null);
+    setActionLoadingId("process-patch-queue");
+    try {
+      const response = await processPatchJobs();
+      setProcessResult(response);
+      await load();
+      setActionFeedback({
+        tone: response.failed_executions > 0 ? "warn" : "ok",
+        message: `${response.jobs_started} jobs iniciados, ${response.jobs_processed} processados e ${response.failed_executions} falhas.`,
+      });
+    } catch (err) {
+      setActionFeedback({ tone: "error", message: err instanceof Error ? err.message : "Falha ao processar a fila." });
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
   const windowsAgents = connectedAgents.filter((agent) => agent.platform.toLowerCase() === "windows");
   const rebootAgents = connectedAgents.filter((agent) => agent.reboot_required);
+  const pendingPatchJobs = patchJobs.filter((job) => job.status === "pending");
+  const runningPatchJobs = patchJobs.filter((job) => job.status === "running");
+  const failedPatchJobs = patchJobs.filter((job) => job.status === "failed");
 
   return (
     <div>
@@ -464,6 +527,86 @@ export function OperationsPage() {
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="panel section">
+        <div className="section-header">
+          <div>
+            <h2 className="section-title">Controle da fila de patches</h2>
+            <span className="muted">
+              Acionamento manual do scheduler e worker para diagnostico ou execucao assistida.
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button
+              className="btn"
+              disabled={actionLoadingId === "run-patch-cycle"}
+              onClick={() => void handleRunPatchCycle()}
+              type="button"
+            >
+              {actionLoadingId === "run-patch-cycle" ? "Gerando..." : "Gerar jobs agora"}
+            </button>
+            <button
+              className="btn btn-primary"
+              disabled={actionLoadingId === "process-patch-queue"}
+              onClick={() => void handleProcessPatchQueue()}
+              type="button"
+            >
+              {actionLoadingId === "process-patch-queue" ? "Processando..." : "Executar proximo ciclo"}
+            </button>
+          </div>
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gap: 12,
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          }}
+        >
+          <div className="list-item">
+            <div>
+              <div className="eyebrow">Fila</div>
+              <div style={{ fontSize: 28, fontWeight: 800 }}>{pendingPatchJobs.length}</div>
+              <div className="muted">jobs pendentes</div>
+            </div>
+          </div>
+          <div className="list-item">
+            <div>
+              <div className="eyebrow">Execucao</div>
+              <div style={{ fontSize: 28, fontWeight: 800 }}>{runningPatchJobs.length}</div>
+              <div className="muted">jobs em andamento</div>
+            </div>
+          </div>
+          <div className="list-item">
+            <div>
+              <div className="eyebrow">Falhas</div>
+              <div style={{ fontSize: 28, fontWeight: 800 }}>{failedPatchJobs.length}</div>
+              <div className="muted">jobs com erro recente</div>
+            </div>
+          </div>
+        </div>
+        {cycleResult ? (
+          <div className="list-item" style={{ marginTop: 12 }}>
+            <div>
+              <div style={{ fontWeight: 700 }}>Ultimo ciclo de geracao</div>
+              <div className="muted" style={{ marginTop: 4 }}>
+                {cycleResult.approved_patches} patches aprovados, {cycleResult.schedules_matched} agendas combinadas,{" "}
+                {cycleResult.jobs_enqueued} jobs e {cycleResult.reboot_commands_enqueued} comandos de reboot.
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {processResult ? (
+          <div className="list-item" style={{ marginTop: 12 }}>
+            <div>
+              <div style={{ fontWeight: 700 }}>Ultimo ciclo de processamento</div>
+              <div className="muted" style={{ marginTop: 4 }}>
+                {processResult.pending_jobs_before} jobs aguardavam, {processResult.jobs_started} iniciaram,{" "}
+                {processResult.jobs_processed} foram processados e {processResult.failed_executions} falharam.
+              </div>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="content-grid">

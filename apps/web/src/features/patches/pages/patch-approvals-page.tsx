@@ -55,6 +55,9 @@ export function PatchApprovalsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const machineIdFilter = searchParams.get("machine_id") ?? "";
   const approvalStatusFilter = searchParams.get("approval_status") ?? "";
+  const severityFilter = searchParams.get("severity") ?? "";
+  const categoryFilter = searchParams.get("category") ?? "";
+  const platformFilter = searchParams.get("platform") ?? "";
   const [patches, setPatches] = useState<PatchApproval[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +67,7 @@ export function PatchApprovalsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PatchApproval | null>(null);
   const [showPatchForm, setShowPatchForm] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const [form, setForm] = useState<PatchCreate>({
     id: "",
     display_name: "",
@@ -94,7 +98,6 @@ export function PatchApprovalsPage() {
     try {
       const response = await fetchPatchApprovals({
         machineId: machineIdFilter || undefined,
-        approvalStatus: approvalStatusFilter || undefined,
       });
       setPatches(response);
       setError(null);
@@ -107,11 +110,59 @@ export function PatchApprovalsPage() {
 
   useEffect(() => {
     void loadPatches();
-  }, [machineIdFilter, approvalStatusFilter]);
+  }, [machineIdFilter]);
 
   function clearFilters() {
     setSearchParams({});
   }
+
+  function updateFilter(key: string, value: string) {
+    const nextParams = new URLSearchParams(searchParams);
+    if (value) {
+      nextParams.set(key, value);
+    } else {
+      nextParams.delete(key);
+    }
+    setSearchParams(nextParams);
+  }
+
+  function patchMatchesPlatform(patch: PatchApproval, platform: string) {
+    if (!platform) return true;
+    const normalizedPlatform = platform.toLowerCase();
+    if (patch.target.toLowerCase().includes(normalizedPlatform)) return true;
+    return patch.affected_machines.some((machine) =>
+      machine.platform.toLowerCase().includes(normalizedPlatform),
+    );
+  }
+
+  function patchMatchesFilters(patch: PatchApproval) {
+    return (
+      (!approvalStatusFilter || patch.approval_status === approvalStatusFilter) &&
+      (!severityFilter || patch.severity === severityFilter) &&
+      (!categoryFilter || patch.category === categoryFilter) &&
+      patchMatchesPlatform(patch, platformFilter)
+    );
+  }
+
+  function uniqueValues(values: string[]) {
+    return Array.from(new Set(values.filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  }
+
+  const filteredPatches = patches.filter(patchMatchesFilters);
+  const pendingPatches = filteredPatches.filter((patch) => patch.approval_status === "pending");
+  const managedPatches = filteredPatches.filter((patch) => patch.approval_status !== "pending");
+  const categoryOptions = uniqueValues(patches.map((patch) => patch.category));
+  const severityOptions = uniqueValues(patches.map((patch) => patch.severity));
+  const platformOptions = uniqueValues(
+    patches.flatMap((patch) => [
+      ...patch.affected_machines.map((machine) => machine.platform),
+      patch.target.toLowerCase().includes("windows") ? "Windows" : "",
+      patch.target.toLowerCase().includes("linux") || patch.target.toLowerCase().includes("ubuntu") ? "Linux" : "",
+    ]),
+  );
+  const hasActiveFilters = Boolean(
+    machineIdFilter || approvalStatusFilter || severityFilter || categoryFilter || platformFilter,
+  );
 
   async function handlePatchDecision(
     patchId: string,
@@ -124,9 +175,7 @@ export function PatchApprovalsPage() {
       const updatedPatch =
         decision === "approved" ? await approvePatch(patchId) : await rejectPatch(patchId);
       setPatches((current) =>
-        current
-          .map((patch) => (patch.id === updatedPatch.id ? updatedPatch : patch))
-          .filter((patch) => !approvalStatusFilter || patch.approval_status === approvalStatusFilter),
+        current.map((patch) => (patch.id === updatedPatch.id ? updatedPatch : patch)),
       );
     } catch (err) {
       setActionError(
@@ -193,6 +242,97 @@ export function PatchApprovalsPage() {
     }
   }
 
+  function renderPatchRows(items: PatchApproval[], emptyMessage: string) {
+    if (!loading && items.length === 0) {
+      return (
+        <tr>
+          <td colSpan={8} className="muted">
+            {emptyMessage}
+          </td>
+        </tr>
+      );
+    }
+
+    return items.map((patch) => (
+      <tr key={patch.id}>
+        <td>
+          <div style={{ fontWeight: 700 }}>{patch.display_name || patch.id}</div>
+          <div className="muted" style={{ marginTop: 4 }}>
+            ID: <span className="code">{patch.id}</span>
+          </div>
+          <div className="muted" style={{ marginTop: 4 }}>
+            {patch.target}
+          </div>
+        </td>
+        <td>{getCategoryLabel(patch.category)}</td>
+        <td>
+          <StatusBadge variant={getSeverityVariant(patch.severity)}>
+            {getSeverityLabel(patch.severity)}
+          </StatusBadge>
+        </td>
+        <td>
+          <StatusBadge variant={getStatusVariant(patch.approval_status)}>
+            {patch.approval_status}
+          </StatusBadge>
+        </td>
+        <td>{patch.machines}</td>
+        <td className="code">{patch.release_date}</td>
+        <td className="muted">
+          {patch.reviewed_by
+            ? `${patch.reviewed_by} - ${patch.reviewed_at ? formatDateTimeSaoPaulo(patch.reviewed_at) : "sem horario"}`
+            : "Aguardando decisao"}
+        </td>
+        <td>
+          <ActionMenu
+            label={`Abrir acoes do patch ${patch.id}`}
+            items={[
+              {
+                label: actingPatchId === patch.id ? "Salvando..." : "Aprovar",
+                onSelect: () => void handlePatchDecision(patch.id, "approved"),
+                disabled: actingPatchId === patch.id || patch.approval_status === "approved",
+              },
+              {
+                label: actingPatchId === patch.id ? "Salvando..." : "Rejeitar",
+                onSelect: () => void handlePatchDecision(patch.id, "rejected"),
+                disabled: actingPatchId === patch.id || patch.approval_status === "rejected",
+                tone: "danger",
+              },
+              {
+                label: "Editar",
+                onSelect: () => handleEditPatch(patch),
+              },
+              {
+                label: "Remover",
+                onSelect: () => setPendingDelete(patch),
+                tone: "danger",
+              },
+            ]}
+          />
+        </td>
+      </tr>
+    ));
+  }
+
+  function renderPatchTable(items: PatchApproval[], emptyMessage: string) {
+    return (
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Patch</th>
+            <th>Categoria</th>
+            <th>Criticidade</th>
+            <th>Status</th>
+            <th>Maquinas afetadas</th>
+            <th>Lancamento</th>
+            <th>Revisao</th>
+            <th>Acoes</th>
+          </tr>
+        </thead>
+        <tbody>{renderPatchRows(items, emptyMessage)}</tbody>
+      </table>
+    );
+  }
+
   return (
     <div className="single-panel-grid">
       <ConfirmModal
@@ -213,13 +353,16 @@ export function PatchApprovalsPage() {
       />
       <section className="panel section">
         <div className="section-header">
-          <h2 className="section-title">Fila de aprovacoes</h2>
+          <h2 className="section-title">Patches pendentes</h2>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <span className="muted">
               {loading
                 ? "Carregando da API..."
-                : `${patches.filter((patch) => patch.approval_status === "pending").length} pendentes`}
+                : `${pendingPatches.length} pendentes`}
             </span>
+            <button className="btn" onClick={() => setShowFilters((current) => !current)} type="button">
+              Filtros
+            </button>
             <button
               className="btn btn-primary btn-primary-uniform"
               onClick={() => {
@@ -232,18 +375,99 @@ export function PatchApprovalsPage() {
             </button>
           </div>
         </div>
-        {(machineIdFilter || approvalStatusFilter) ? (
-          <div className="list-item subtle-filter-panel" style={{ marginBottom: 16 }}>
-            <div>
-              <div style={{ fontWeight: 700 }}>Filtro ativo</div>
-              <div className="muted" style={{ marginTop: 4 }}>
-                {machineIdFilter ? `Maquina: ${machineIdFilter}` : "Todas as maquinas"}
-                {approvalStatusFilter ? ` - status: ${approvalStatusFilter}` : ""}
+        {showFilters ? (
+          <div className="list-item subtle-filter-panel" style={{ marginBottom: 16, alignItems: "stretch" }}>
+            <div style={{ display: "grid", gap: 12, width: "100%" }}>
+              <div>
+                <div style={{ fontWeight: 700 }}>Filtros</div>
+                <div className="muted" style={{ marginTop: 4 }}>
+                  {machineIdFilter
+                    ? `Maquina filtrada: ${machineIdFilter}`
+                    : "Use os filtros disponiveis para reduzir a fila sem esconder o contexto."}
+                </div>
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 12,
+                  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                }}
+              >
+                <label>
+                  <span className="field-label">Status</span>
+                  <select
+                    className="select"
+                    value={approvalStatusFilter}
+                    onChange={(event) => updateFilter("approval_status", event.target.value)}
+                  >
+                    <option value="">Todos</option>
+                    <option value="pending">Pendentes</option>
+                    <option value="approved">Aprovados</option>
+                    <option value="rejected">Rejeitados</option>
+                  </select>
+                </label>
+                <label>
+                  <span className="field-label">Criticidade</span>
+                  <select
+                    className="select"
+                    value={severityFilter}
+                    onChange={(event) => updateFilter("severity", event.target.value)}
+                  >
+                    <option value="">Todas</option>
+                    {severityOptions.map((severity) => (
+                      <option key={severity} value={severity}>
+                        {getSeverityLabel(severity)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span className="field-label">Categoria</span>
+                  <select
+                    className="select"
+                    value={categoryFilter}
+                    onChange={(event) => updateFilter("category", event.target.value)}
+                  >
+                    <option value="">Todas</option>
+                    {categoryOptions.map((category) => (
+                      <option key={category} value={category}>
+                        {getCategoryLabel(category)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span className="field-label">Plataforma</span>
+                  <select
+                    className="select"
+                    value={platformFilter}
+                    onChange={(event) => updateFilter("platform", event.target.value)}
+                  >
+                    <option value="">Todas</option>
+                    {platformOptions.map((platform) => (
+                      <option key={platform} value={platform}>
+                        {platform}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
             </div>
-            <button className="btn" onClick={clearFilters} type="button">
-              Limpar filtro
-            </button>
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+              {hasActiveFilters ? (
+                <button className="btn" onClick={clearFilters} type="button">
+                  Limpar filtro
+                </button>
+              ) : null}
+              <button className="btn" onClick={() => setShowFilters(false)} type="button">
+                Fechar
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {hasActiveFilters ? (
+          <div className="muted" style={{ marginTop: -8, marginBottom: 16 }}>
+            {filteredPatches.length} patches encontrados para os filtros atuais.
           </div>
         ) : null}
         {error ? (
@@ -256,89 +480,22 @@ export function PatchApprovalsPage() {
             {actionError}
           </p>
         ) : null}
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Patch</th>
-              <th>Categoria</th>
-              <th>Criticidade</th>
-              <th>Status</th>
-              <th>Maquinas afetadas</th>
-              <th>Lancamento</th>
-              <th>Revisao</th>
-              <th>Acoes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {!loading && patches.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="muted">
-                  {machineIdFilter
-                    ? "Este host reportou pendencias no resumo, mas ainda nao enviou o inventario detalhado de patches. Atualize ou reinicie o agente e aguarde o proximo check-in."
-                    : "Nenhum patch encontrado para o filtro atual."}
-                </td>
-              </tr>
-            ) : null}
-            {patches.map((patch) => (
-              <tr key={patch.id}>
-                <td>
-                  <div style={{ fontWeight: 700 }}>{patch.display_name || patch.id}</div>
-                  <div className="muted" style={{ marginTop: 4 }}>
-                    ID: <span className="code">{patch.id}</span>
-                  </div>
-                  <div className="muted" style={{ marginTop: 4 }}>
-                    {patch.target}
-                  </div>
-                </td>
-                <td>{getCategoryLabel(patch.category)}</td>
-                <td>
-                  <StatusBadge variant={getSeverityVariant(patch.severity)}>
-                    {getSeverityLabel(patch.severity)}
-                  </StatusBadge>
-                </td>
-                <td>
-                  <StatusBadge variant={getStatusVariant(patch.approval_status)}>
-                    {patch.approval_status}
-                  </StatusBadge>
-                </td>
-                <td>{patch.machines}</td>
-                <td className="code">{patch.release_date}</td>
-                <td className="muted">
-                  {patch.reviewed_by
-                    ? `${patch.reviewed_by} - ${patch.reviewed_at ? formatDateTimeSaoPaulo(patch.reviewed_at) : "sem horario"}`
-                    : "Aguardando decisao"}
-                </td>
-                <td>
-                  <ActionMenu
-                    label={`Abrir acoes do patch ${patch.id}`}
-                    items={[
-                      {
-                        label: actingPatchId === patch.id ? "Salvando..." : "Aprovar",
-                        onSelect: () => void handlePatchDecision(patch.id, "approved"),
-                        disabled: actingPatchId === patch.id,
-                      },
-                      {
-                        label: actingPatchId === patch.id ? "Salvando..." : "Rejeitar",
-                        onSelect: () => void handlePatchDecision(patch.id, "rejected"),
-                        disabled: actingPatchId === patch.id,
-                        tone: "danger",
-                      },
-                      {
-                        label: "Editar",
-                        onSelect: () => handleEditPatch(patch),
-                      },
-                      {
-                        label: "Remover",
-                        onSelect: () => setPendingDelete(patch),
-                        tone: "danger",
-                      },
-                    ]}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {renderPatchTable(
+          pendingPatches,
+          machineIdFilter
+            ? "Este host reportou pendencias no resumo, mas ainda nao enviou patches pendentes para o filtro atual."
+            : "Nenhum patch pendente para o filtro atual.",
+        )}
+      </section>
+
+      <section className="panel section">
+        <div className="section-header">
+          <h2 className="section-title">Patches ja gerenciados</h2>
+          <span className="muted">
+            {loading ? "Carregando da API..." : `${managedPatches.length} aprovados ou rejeitados`}
+          </span>
+        </div>
+        {renderPatchTable(managedPatches, "Nenhum patch aprovado ou rejeitado para o filtro atual.")}
       </section>
 
       {showPatchForm || editingId ? (

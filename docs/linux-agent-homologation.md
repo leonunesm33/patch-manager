@@ -13,6 +13,7 @@ What already works:
 - reboot-required signal
 - Linux job claim and result submission
 - controlled execution modes `dry-run` and `apply`
+- scheduled reboot command handling, guarded by environment flags
 
 What is still simulated:
 
@@ -175,7 +176,7 @@ In Patch Manager:
 In Patch Manager:
 
 1. Approve a Linux patch in `Patches`.
-2. Enqueue jobs in `Relatorios`.
+2. Enqueue jobs in `Operacoes`.
 3. Let the Linux agent claim the job.
 4. Check the result in `Relatorios`.
 
@@ -186,6 +187,27 @@ Expected result:
 - the result returns as `applied` or `failed`
 - dashboard and reports update after execution logs are created
 
+## Validate Scheduled Reboot
+
+Reboot is protected by agent environment flags. For a safe first test, keep simulation enabled if available in the installed version.
+
+Recommended validation:
+
+1. target a non-critical homologation host
+2. create a schedule with a future reboot window
+3. use `Sempre reiniciar` only when the test is specifically about reboot
+4. wait at least one scheduler interval after the configured time
+5. check `Operacoes`, `Relatorios` and the agent journal
+
+Useful commands:
+
+```bash
+sudo journalctl -u patch-manager-agent-linux.service -n 120
+sudo systemctl status patch-manager-agent-linux.service
+```
+
+If the schedule does not fire, use a new future time and inspect API scheduler logs before changing the agent.
+
 ## Current Homologation Interpretation
 
 This homologation already validates:
@@ -195,6 +217,7 @@ This homologation already validates:
 - real host inventory collection
 - pending update count collection
 - end-to-end job orchestration
+- scheduled reboot orchestration with guardrails
 - safe command execution path for Linux
 - bootstrap enrollment and approval flow
 - upgrade of an already-installed agent
@@ -202,5 +225,4 @@ This homologation already validates:
 This homologation does not yet validate:
 
 - real package installation
-- reboot execution
 - package-by-package historical inventory in the UI

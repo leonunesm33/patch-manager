@@ -1,21 +1,29 @@
 # Roadmap
 
-## Fase 1
+## Entregue na POC atual
 
-- scaffold do monorepo
-- frontend navegavel
-- backend com endpoints mockados
-- docker compose local
+- monorepo com frontend, API, agentes, infraestrutura e documentacao
+- frontend navegavel com dashboard, maquinas, aprovacoes, agendamentos, operacoes, relatorios, configuracoes e usuarios
+- backend FastAPI com PostgreSQL, Redis, JWT, migrations, scheduler e worker
+- Docker Compose para central local/POC com gateway TLS
+- agentes Linux e Windows com bootstrap, aprovacao, inventario, check-in, comandos e upgrade remoto
+- inventario de updates pendentes Linux e Windows
+- aprovacoes com patches pendentes e gerenciados
+- agendamentos por maquina, grupo ou sistema operacional
+- horarios separados para instalacao e reboot
+- grupos de maquinas gerenciados no menu `Maquinas`
+- operacoes para fila, comandos, agentes e pendencias
+- relatorios com exportacoes CSV, JSON, HTML, PDF e Excel-compativel
+- documentacao de POC, operacao, troubleshooting, homologacao e limites
 
-## Fase 2
+## Proximas evolucoes recomendadas
 
-- persistencia com PostgreSQL
-- autenticacao JWT
-- aprovacoes e agendamentos reais
-
-## Fase 3
-
-- scheduler
-- websocket
-- agente Linux
-- agente Windows
+- implementar exportacao `.xlsx` real e PDF server-side
+- adicionar testes automatizados para scheduler, reboot e aprovacoes
+- melhorar rastreabilidade visual de comandos agendados por politica
+- reforcar RBAC granular por recurso e segregacao por ambiente/cliente
+- criar pipeline de release assinado para o agente Windows
+- homologar apply real Linux em ambiente dedicado
+- homologar instalacao Windows real com politicas corporativas
+- adicionar dashboard executivo de SLA e compliance
+- integrar logs estruturados com stack externa de observabilidade
