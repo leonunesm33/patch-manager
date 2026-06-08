@@ -123,6 +123,7 @@ Documentos:
 
 - `docs/windows-agent-homologation.md`
 - `docs/windows-agent-test-checklist.md`
+- `docs/poc-homologation-step-by-step.md`
 
 ## Funcionalidades principais
 
@@ -163,6 +164,7 @@ git status --short
 cat CLAUDE.md
 cat README.md
 cat docs/project-handoff-review.md
+cat docs/poc-homologation-step-by-step.md
 ```
 
 Depois escolha a validacao adequada:

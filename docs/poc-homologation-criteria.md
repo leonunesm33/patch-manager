@@ -1,5 +1,7 @@
 # Patch Manager POC Homologation Criteria
 
+Use `docs/poc-homologation-step-by-step.md` como roteiro operacional para executar a homologacao completa da central, agentes e fluxos fim a fim.
+
 ## A central e considerada pronta para entrega quando:
 
 ### Instalacao
@@ -9,7 +11,7 @@
 
 ### Autenticacao e seguranca minima
 - o admin inicial precisa trocar a senha
-- perfis `admin`, `operator` e `viewer` funcionam
+- perfis `admin` e `user` funcionam
 - segredos nao ficam fixos em codigo para a instalacao da POC
 
 ### Fluxo funcional

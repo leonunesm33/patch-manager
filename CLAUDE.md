@@ -169,6 +169,7 @@ Flags importantes do agente Windows:
 
 - `README.md`: visao geral e comandos principais
 - `docs/poc-deployment-guide.md`: instalacao central
+- `docs/poc-homologation-step-by-step.md`: roteiro completo de homologacao da central e agentes
 - `docs/poc-operations-guide.md`: operacao da central
 - `docs/poc-troubleshooting.md`: diagnostico
 - `docs/agent-installation-guide.md`: agentes

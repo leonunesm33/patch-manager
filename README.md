@@ -131,6 +131,7 @@ Guias detalhados:
 
 - `CLAUDE.md`: handoff operacional para continuar o projeto pelo Claude Code
 - `docs/poc-deployment-guide.md`: implantacao da central POC
+- `docs/poc-homologation-step-by-step.md`: passo a passo completo de homologacao da aplicacao, central e agentes
 - `docs/poc-operations-guide.md`: operacao diaria
 - `docs/poc-troubleshooting.md`: diagnostico de falhas comuns
 - `docs/project-handoff-review.md`: revisao consolidada para continuidade por outro agente de codigo
