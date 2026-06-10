@@ -460,7 +460,7 @@ $null = New-Item -ItemType Directory -Force -Path "C:\\ProgramData\\PatchManager
 
 {agent_download_block}
 
-@"
+$EnvContent = @"
 PATCH_MANAGER_API=$ServerUrl/api/v1/agents
 PATCH_MANAGER_AGENT_ID=$AgentId
 PATCH_MANAGER_AGENT_KEY=
@@ -481,7 +481,8 @@ PATCH_MANAGER_REQUEST_TIMEOUT=10
 PATCH_MANAGER_LOG_LEVEL=INFO
 PATCH_MANAGER_LOG_TO_STDOUT=true
 PATCH_MANAGER_LOG_FILE=$LogFile
-"@ | Set-Content -Path $EnvTarget -Encoding UTF8
+"@
+[System.IO.File]::WriteAllText($EnvTarget, $EnvContent, [System.Text.UTF8Encoding]::new($false))
 
 [System.Environment]::SetEnvironmentVariable("PATCH_MANAGER_ENV_FILE", $EnvTarget, "Machine")
 

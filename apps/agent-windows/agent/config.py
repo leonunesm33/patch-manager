@@ -16,7 +16,7 @@ def _load_env_file() -> str | None:
         env_path = Path(candidate).expanduser()
         if not env_path.exists() or not env_path.is_file():
             continue
-        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        for raw_line in env_path.read_text(encoding="utf-8-sig").splitlines():
             line = raw_line.strip()
             if not line or line.startswith("#") or "=" not in line:
                 continue
