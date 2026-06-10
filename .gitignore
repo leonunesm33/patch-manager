@@ -1,5 +1,8 @@
 node_modules/
 dist/
+!apps/agent-windows/dist/
+apps/agent-windows/dist/*
+!apps/agent-windows/dist/PatchManagerAgentWindows.exe
 build/
 .env
 .venv/
