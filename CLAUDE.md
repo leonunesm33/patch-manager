@@ -21,8 +21,18 @@ O foco atual e deixar a solucao confiavel para homologacao real e demonstracao c
 - GitHub: `https://github.com/leonunesm33/patch-manager.git`
 - Windows/local: `D:\Patch Manager`
 - WSL/runtime: `~/patch-manager`
+- Servidor POC: `/opt/patch-manager` (Ubuntu 24.04 remoto, git inicializado via `git init` + `git reset --hard origin/main`)
 
 O usuario costuma editar no Cursor em `D:\Patch Manager`, mas o runtime mais estavel para dependencias e Docker e o WSL. Ao finalizar uma etapa, sincronize GitHub, Disco D e WSL.
+
+Para atualizar o servidor POC apos um commit:
+
+```bash
+cd /opt/patch-manager
+sudo git pull --ff-only
+cd infra/compose
+sudo docker compose up -d --build api
+```
 
 ## Regras de trabalho
 
