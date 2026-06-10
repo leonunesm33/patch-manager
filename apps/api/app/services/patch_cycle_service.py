@@ -361,6 +361,11 @@ class PatchCycleService:
             now,
         )
 
+    # Janela máxima de tolerância após o horário agendado. Após este período
+    # o scheduler para de gerar novos comandos para aquela janela, evitando
+    # que agentes recém-instalados recebam comandos de reboot de janelas já expiradas.
+    WINDOW_MAX_AGE_SECONDS: int = 3600  # 60 minutos
+
     def _is_schedule_window_due(
         self,
         recurrence: str | None,
@@ -379,6 +384,9 @@ class PatchCycleService:
         anchor = anchor_date or now.date()
         scheduled_at = datetime.combine(now.date(), parsed_time, tzinfo=now.tzinfo)
         if scheduled_at > now:
+            return False
+
+        if (now - scheduled_at).total_seconds() > self.WINDOW_MAX_AGE_SECONDS:
             return False
 
         if recurrence_value == "once":
