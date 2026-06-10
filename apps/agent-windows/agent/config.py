@@ -6,6 +6,7 @@ from pathlib import Path
 def _load_env_file() -> str | None:
     env_candidates = [
         os.getenv("PATCH_MANAGER_ENV_FILE"),
+        "C:/ProgramData/PatchManager/agent-windows.env",
         str(Path.cwd() / ".env"),
         str(Path(__file__).resolve().parent.parent / ".env"),
     ]

@@ -483,6 +483,8 @@ PATCH_MANAGER_LOG_TO_STDOUT=true
 PATCH_MANAGER_LOG_FILE=$LogFile
 "@ | Set-Content -Path $EnvTarget -Encoding UTF8
 
+[System.Environment]::SetEnvironmentVariable("PATCH_MANAGER_ENV_FILE", $EnvTarget, "Machine")
+
 $action = New-ScheduledTaskAction -Execute $PowerShellExecutable -Argument "-ExecutionPolicy Bypass -File agent\\run-agent.ps1" -WorkingDirectory $InstallRoot
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
 
