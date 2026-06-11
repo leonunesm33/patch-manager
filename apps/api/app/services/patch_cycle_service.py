@@ -61,7 +61,8 @@ class PatchCycleService:
             related_schedules = [
                 schedule
                 for schedule in schedules
-                if self._is_install_window_due(schedule, now)
+                if schedule.is_active
+                and self._is_install_window_due(schedule, now)
                 and self._select_job_machines(schedule, patch, machines)
             ]
             if related_schedules:
@@ -117,6 +118,8 @@ class PatchCycleService:
         commands: list[AgentCommandModel] = []
 
         for schedule in schedules:
+            if not schedule.is_active:
+                continue
             reboot_policy = self._normalize_reboot_policy(schedule.reboot_policy)
             if reboot_policy == "never" or not self._is_reboot_window_due(schedule, now):
                 continue

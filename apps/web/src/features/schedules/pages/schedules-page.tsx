@@ -3,6 +3,7 @@ import {
   createSchedule,
   deleteSchedule,
   fetchSchedules,
+  toggleScheduleActive,
   updateSchedule,
 } from "@/features/schedules/api";
 import {
@@ -32,6 +33,7 @@ const emptyScheduleForm: ScheduleCreate = {
   reboot_time: "03:00",
   recurrence: "weekly",
   reboot_policy: "if-needed",
+  is_active: true,
 };
 
 const recurrenceLabels: Record<ScheduleRecurrence, string> = {
@@ -68,6 +70,7 @@ function normalizeScheduleForEdit(schedule: ScheduleItem): ScheduleCreate {
       : schedule.reboot_policy.toLowerCase().includes("sempre")
         ? "always"
         : "if-needed",
+    is_active: schedule.is_active ?? true,
   };
 }
 
@@ -180,6 +183,15 @@ export function SchedulesPage() {
     setFormError(null);
   }
 
+  async function handleToggleActive(schedule: ScheduleItem) {
+    try {
+      const updated = await toggleScheduleActive(schedule.id, !schedule.is_active);
+      setSchedules((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Falha ao alterar status do agendamento.");
+    }
+  }
+
   async function handleDeleteSchedule(schedule: ScheduleItem) {
     try {
       await deleteSchedule(schedule.id);
@@ -216,10 +228,10 @@ export function SchedulesPage() {
       <div className="single-panel-grid">
         <section className="panel section">
           <div className="section-header">
-            <h2 className="section-title">Agendamentos ativos</h2>
+            <h2 className="section-title">Agendamentos</h2>
             <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
               <span className="muted">
-                {loading ? "Carregando da API..." : `${schedules.length} politicas ativas`}
+                {loading ? "Carregando da API..." : `${schedules.filter((s) => s.is_active).length} ativos de ${schedules.length}`}
               </span>
               <button
                 className="btn btn-primary btn-primary-uniform"
@@ -245,9 +257,23 @@ export function SchedulesPage() {
               </div>
             ) : null}
             {schedules.map((schedule) => (
-              <div key={schedule.id} className="list-item">
+              <div key={schedule.id} className="list-item" style={{ opacity: schedule.is_active ? 1 : 0.6 }}>
                 <div>
-                  <div style={{ fontWeight: 700 }}>{schedule.name}</div>
+                  <div style={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+                    {schedule.name}
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        padding: "2px 7px",
+                        borderRadius: 4,
+                        background: schedule.is_active ? "var(--color-success, #2d6a2d)" : "var(--color-muted-bg, #333)",
+                        color: schedule.is_active ? "#a8f0a8" : "var(--color-muted, #999)",
+                      }}
+                    >
+                      {schedule.is_active ? "Ativo" : "Inativo"}
+                    </span>
+                  </div>
                   <div className="muted" style={{ marginTop: 4 }}>
                     {scopeLabels[schedule.scope_type] ?? "Escopo"}: {schedule.scope_value || schedule.scope}
                   </div>
@@ -262,6 +288,10 @@ export function SchedulesPage() {
                         {
                           label: "Editar",
                           onSelect: () => handleEditSchedule(schedule),
+                        },
+                        {
+                          label: schedule.is_active ? "Desativar" : "Ativar",
+                          onSelect: () => void handleToggleActive(schedule),
                         },
                         {
                           label: "Remover",
@@ -434,6 +464,14 @@ export function SchedulesPage() {
                   setForm((current) => ({ ...current, reboot_time: event.target.value || null }))
                 }
               />
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={form.is_active}
+                onChange={(event) => setForm((current) => ({ ...current, is_active: event.target.checked }))}
+              />
+              <span className="field-label" style={{ margin: 0 }}>Janela ativa</span>
             </label>
             {formError ? (
               <p className="muted" style={{ margin: 0, color: "#ff9fb0" }}>

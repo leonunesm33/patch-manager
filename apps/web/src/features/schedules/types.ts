@@ -11,6 +11,7 @@ export type ScheduleItem = {
   reboot_time: string | null;
   recurrence: ScheduleRecurrence;
   reboot_policy: string;
+  is_active: boolean;
 };
 
 export type ScheduleScopeType = "machine" | "group" | "os";
@@ -27,4 +28,5 @@ export type ScheduleCreate = {
   reboot_time: string | null;
   recurrence: ScheduleRecurrence;
   reboot_policy: ScheduleRebootPolicy;
+  is_active: boolean;
 };

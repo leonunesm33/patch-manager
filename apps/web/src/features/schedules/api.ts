@@ -19,6 +19,13 @@ export function updateSchedule(scheduleId: string, payload: ScheduleCreate) {
   });
 }
 
+export function toggleScheduleActive(scheduleId: string, isActive: boolean) {
+  return http<ScheduleItem>(`/schedules/${scheduleId}/active`, {
+    method: "PATCH",
+    body: JSON.stringify({ is_active: isActive }),
+  });
+}
+
 export function deleteSchedule(scheduleId: string) {
   return http<void>(`/schedules/${scheduleId}`, {
     method: "DELETE",

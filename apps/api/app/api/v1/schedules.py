@@ -9,7 +9,7 @@ from app.api.deps import get_db, require_operator, require_viewer
 from app.models.schedule import ScheduleModel
 from app.repositories.schedule_repository import ScheduleRepository
 from app.schemas.auth import UserResponse
-from app.schemas.schedule import ScheduleCreate, ScheduleItem
+from app.schemas.schedule import ScheduleCreate, ScheduleItem, ScheduleToggle
 
 router = APIRouter()
 
@@ -104,6 +104,7 @@ def _apply_payload(schedule: ScheduleModel, payload: ScheduleCreate) -> Schedule
     schedule.recurrence = recurrence
     schedule.cron_label = _cron_label(recurrence, schedule.install_time)
     schedule.reboot_policy = _reboot_policy_label(payload.reboot_policy, schedule.reboot_time)
+    schedule.is_active = payload.is_active
     return schedule
 
 
@@ -145,6 +146,7 @@ def create_schedule(
                 reboot_time=None,
                 recurrence="weekly",
                 reboot_policy="if-needed",
+                is_active=True,
             ),
             payload,
         )
@@ -166,6 +168,23 @@ def update_schedule(
 
     schedule = _apply_payload(schedule, payload)
 
+    schedule = repository.update(schedule)
+    return ScheduleItem.model_validate(schedule)
+
+
+@router.patch("/{schedule_id}/active", response_model=ScheduleItem)
+def toggle_schedule_active(
+    schedule_id: str,
+    payload: ScheduleToggle,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[UserResponse, Depends(require_operator)],
+) -> ScheduleItem:
+    repository = ScheduleRepository(db)
+    schedule = repository.get_by_id(schedule_id)
+    if schedule is None:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+
+    schedule.is_active = payload.is_active
     schedule = repository.update(schedule)
     return ScheduleItem.model_validate(schedule)
 

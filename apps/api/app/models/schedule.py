@@ -1,5 +1,6 @@
 from datetime import date, datetime
 
+import sqlalchemy as sa
 from sqlalchemy import Date, DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,6 +22,7 @@ class ScheduleModel(Base):
     reboot_time: Mapped[str | None] = mapped_column(String(5), nullable=True)
     recurrence: Mapped[str] = mapped_column(String(20), default="weekly", nullable=False)
     reboot_policy: Mapped[str] = mapped_column(String(80))
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, server_default=sa.true(), default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

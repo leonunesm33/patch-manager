@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime
+from datetime import date
 
 from sqlalchemy import select
 
@@ -6,7 +6,6 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.models.agent_credential import AgentCredentialModel
-from app.models.machine import MachineModel
 from app.models.machine_group import MachineGroupModel
 from app.models.patch import PatchModel
 from app.models.schedule import ScheduleModel
@@ -41,47 +40,6 @@ def seed_initial_data() -> None:
                 )
             )
 
-        if session.scalar(select(MachineModel.id).limit(1)) is None:
-            session.add_all(
-                [
-                    MachineModel(
-                        id="srv-web-01",
-                        name="SRV-WEB-01",
-                        ip="10.0.1.21",
-                        platform="Windows",
-                        environment="production",
-                        group="Web Servers",
-                        status="online",
-                        pending_patches=4,
-                        last_check_in=datetime(2026, 4, 9, 14, 12, tzinfo=UTC),
-                        risk="critical",
-                    ),
-                    MachineModel(
-                        id="srv-db-02",
-                        name="SRV-DB-02",
-                        ip="10.0.2.11",
-                        platform="Windows",
-                        environment="production",
-                        group="Database",
-                        status="warning",
-                        pending_patches=7,
-                        last_check_in=datetime(2026, 4, 9, 13, 58, tzinfo=UTC),
-                        risk="critical",
-                    ),
-                    MachineModel(
-                        id="ubuntu-prod-03",
-                        name="ubuntu-prod-03",
-                        ip="10.1.4.33",
-                        platform="Ubuntu",
-                        environment="production",
-                        group="Linux Production",
-                        status="online",
-                        pending_patches=3,
-                        last_check_in=datetime(2026, 4, 9, 14, 10, tzinfo=UTC),
-                        risk="important",
-                    ),
-                ]
-            )
 
         if session.scalar(select(MachineGroupModel.id).limit(1)) is None:
             session.add_all(
@@ -131,6 +89,7 @@ def seed_initial_data() -> None:
                         reboot_time="03:00",
                         recurrence="weekly",
                         reboot_policy="Reiniciar se necessario as 03:00",
+                        is_active=False,
                     ),
                     ScheduleModel(
                         id="sched-2",
@@ -143,6 +102,7 @@ def seed_initial_data() -> None:
                         reboot_time="04:00",
                         recurrence="daily",
                         reboot_policy="Sempre reiniciar as 04:00",
+                        is_active=False,
                     ),
                 ]
             )

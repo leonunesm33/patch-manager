@@ -18,6 +18,7 @@ class ScheduleItem(BaseModel):
     reboot_time: str | None = None
     recurrence: str = "weekly"
     reboot_policy: str
+    is_active: bool = True
 
 
 class ScheduleCreate(BaseModel):
@@ -30,3 +31,8 @@ class ScheduleCreate(BaseModel):
     reboot_time: str | None = None
     recurrence: str = "weekly"
     reboot_policy: str = "if-needed"
+    is_active: bool = True
+
+
+class ScheduleToggle(BaseModel):
+    is_active: bool
