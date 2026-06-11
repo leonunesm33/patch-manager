@@ -31,8 +31,11 @@ Para atualizar o servidor POC apos um commit:
 cd /opt/patch-manager
 sudo git pull --ff-only
 cd infra/compose
-sudo docker compose up -d --build api
+sudo docker compose up -d --build api web
 ```
+
+Regra: use `--build api web` sempre que houver mudancas em `apps/api` ou `apps/web`.
+O container `web` compila o React em tempo de build — sem rebuild, o frontend antigo continua sendo servido.
 
 ## Regras de trabalho
 
