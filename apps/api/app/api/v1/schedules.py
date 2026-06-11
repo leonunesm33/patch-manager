@@ -116,8 +116,7 @@ def list_schedules(
     try:
         repository = ScheduleRepository(db)
         schedules = repository.list_all()
-        if schedules:
-            return [ScheduleItem.model_validate(schedule) for schedule in schedules]
+        return [ScheduleItem.model_validate(schedule) for schedule in schedules]
     except SQLAlchemyError:
         pass
 
