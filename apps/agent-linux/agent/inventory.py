@@ -35,7 +35,21 @@ def _count_lines(output: str) -> int:
     return len([line for line in output.splitlines() if line.strip()])
 
 
-def _collect_apt_upgradable_details(limit: int = 50) -> list[dict[str, object]]:
+def _get_security_packages() -> set[str]:
+    pkg_names: set[str] = set()
+    for path in glob.glob("/var/lib/apt/lists/*security*_Packages"):
+        try:
+            with open(path, encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    if line.startswith("Package: "):
+                        pkg_names.add(line[9:].strip())
+        except OSError:
+            pass
+    return pkg_names
+
+
+def _collect_apt_upgradable_details(limit: int = 500) -> list[dict[str, object]]:
+    security_pkgs = _get_security_packages()
     upgradable_output = _run(["apt", "list", "--upgradable"], timeout=30)
     details: list[dict[str, object]] = []
     for raw_line in upgradable_output.splitlines()[1:]:
@@ -66,7 +80,7 @@ def _collect_apt_upgradable_details(limit: int = 50) -> list[dict[str, object]]:
                 "source": source,
                 "summary": line,
                 "kb_id": None,
-                "security_only": "security" in line.lower() or "security" in str(source).lower(),
+                "security_only": identifier in security_pkgs or "security" in str(source).lower(),
                 "installed_at": None,
             }
         )
