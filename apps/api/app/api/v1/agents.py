@@ -117,9 +117,9 @@ def _inventory_patch_category(item: AgentInventoryItemModel) -> str:
 
 
 def _inventory_patch_severity(item: AgentInventoryItemModel) -> str:
-    category = _inventory_patch_category(item)
     if item.security_only:
-        return "high"
+        return "important"
+    category = _inventory_patch_category(item)
     if category in {"driver", "firmware"}:
         return "medium"
     return "medium"

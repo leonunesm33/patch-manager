@@ -35,23 +35,58 @@ def _count_lines(output: str) -> int:
     return len([line for line in output.splitlines() if line.strip()])
 
 
-def _get_security_packages() -> set[str]:
-    pkg_names: set[str] = set()
+def _get_security_packages_via_python_apt() -> set[str] | None:
+    """Use python3-apt (same lib as PackageKit/Cockpit) to identify security packages.
+
+    Returns set of package names whose candidate version comes from a security origin,
+    or None if python3-apt is unavailable.
+    """
+    script = (
+        "import apt; cache = apt.Cache(); "
+        "print('\\n'.join("
+        "n for n in cache.keys() "
+        "if cache[n].is_upgradable and cache[n].candidate and "
+        "any('security' in (o.origin or '').lower() or "
+        "    'security' in (o.archive or '').lower() "
+        "    for o in cache[n].candidate.origins)"
+        "))"
+    )
+    output = _run(["python3", "-c", script], timeout=45)
+    if output:
+        return set(output.split("\n"))
+    return None
+
+
+def _get_security_packages_from_lists(target_versions: dict[str, str]) -> set[str]:
+    """Fallback: match (package, candidate-version) against security repo package lists.
+
+    A package is security if the exact version apt would install is published
+    in a *security* repo list — same logic python-apt uses internally.
+    """
+    security_versions: dict[str, set[str]] = {}
     for path in glob.glob("/var/lib/apt/lists/*security*_Packages"):
         try:
+            current_pkg: str | None = None
             with open(path, encoding="utf-8", errors="ignore") as f:
                 for line in f:
                     if line.startswith("Package: "):
-                        pkg_names.add(line[9:].strip())
+                        current_pkg = line[9:].strip()
+                    elif line.startswith("Version: ") and current_pkg:
+                        security_versions.setdefault(current_pkg, set()).add(line[9:].strip())
         except OSError:
             pass
-    return pkg_names
+    return {
+        name
+        for name, ver in target_versions.items()
+        if ver and name in security_versions and ver in security_versions[name]
+    }
 
 
 def _collect_apt_upgradable_details(limit: int = 500) -> list[dict[str, object]]:
-    security_pkgs = _get_security_packages()
     upgradable_output = _run(["apt", "list", "--upgradable"], timeout=30)
-    details: list[dict[str, object]] = []
+
+    # First pass: parse raw items so we have target versions before security check
+    raw_items: list[dict[str, object]] = []
     for raw_line in upgradable_output.splitlines()[1:]:
         line = raw_line.strip()
         if not line:
@@ -70,17 +105,40 @@ def _collect_apt_upgradable_details(limit: int = 500) -> list[dict[str, object]]
             target_version = parts[1] if len(parts) > 1 else None
             current_match = re.search(r"\[upgradable from:\s*([^\]]+)\]", line)
             current_version = current_match.group(1) if current_match else None
+        raw_items.append({
+            "identifier": identifier,
+            "source": source,
+            "target_version": target_version,
+            "current_version": current_version,
+            "line": line,
+        })
 
+    # Determine security packages using python3-apt first, version-list fallback second
+    target_versions = {
+        str(item["identifier"]): str(item["target_version"] or "")
+        for item in raw_items
+    }
+    security_pkgs = _get_security_packages_via_python_apt()
+    if security_pkgs is None:
+        security_pkgs = _get_security_packages_from_lists(target_versions)
+
+    details: list[dict[str, object]] = []
+    for item in raw_items:
+        identifier = str(item["identifier"])
+        source = str(item["source"])
         details.append(
             {
                 "identifier": identifier,
                 "title": identifier,
-                "current_version": current_version,
-                "target_version": target_version,
+                "current_version": item["current_version"],
+                "target_version": item["target_version"],
                 "source": source,
-                "summary": line,
+                "summary": item["line"],
                 "kb_id": None,
-                "security_only": identifier in security_pkgs or "security" in str(source).lower(),
+                "security_only": (
+                    identifier in security_pkgs
+                    or "security" in source.lower()
+                ),
                 "installed_at": None,
             }
         )
