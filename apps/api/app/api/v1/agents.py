@@ -104,25 +104,30 @@ def _inventory_patch_id(agent_id: str, item: AgentInventoryItemModel) -> str:
 
 
 def _inventory_patch_category(item: AgentInventoryItemModel) -> str:
+    # Prefer agent-provided value (Cockpit/PackageKit standard: security|bugfix|enhancement|unknown)
+    if item.category:
+        return item.category
+    # Fallback heuristic for agents that don't send category
+    if item.security_only:
+        return "security"
     source = (item.source or "").lower()
     summary = (item.summary or "").lower()
     title = item.title.lower()
-    if item.security_only:
-        return "security"
     if "driver" in source or "driver" in summary or "driver" in title:
         return "driver"
     if "firmware" in source or "firmware" in summary or "firmware" in title:
         return "firmware"
-    return "other"
+    return "unknown"
 
 
 def _inventory_patch_severity(item: AgentInventoryItemModel) -> str:
+    # Prefer agent-provided value (Cockpit/PackageKit standard: critical|important|moderate|low|unknown)
+    if item.severity:
+        return item.severity
+    # Fallback heuristic for agents that don't send severity
     if item.security_only:
         return "important"
-    category = _inventory_patch_category(item)
-    if category in {"driver", "firmware"}:
-        return "medium"
-    return "medium"
+    return "low"
 
 
 def _sync_inventory_patches(
@@ -1277,6 +1282,8 @@ def submit_agent_inventory(
             summary=item.summary,
             kb_id=item.kb_id,
             security_only=item.security_only,
+            category=item.category,
+            severity=item.severity,
             installed_at=item.installed_at,
             sort_order=index,
         )
@@ -1295,6 +1302,8 @@ def submit_agent_inventory(
             summary=item.summary,
             kb_id=item.kb_id,
             security_only=item.security_only,
+            category=item.category,
+            severity=item.severity,
             installed_at=item.installed_at,
             sort_order=index,
         )

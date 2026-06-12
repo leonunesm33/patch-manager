@@ -1,5 +1,6 @@
 import glob
 import gzip
+import json
 import os
 import platform
 import re
@@ -35,26 +36,50 @@ def _count_lines(output: str) -> int:
     return len([line for line in output.splitlines() if line.strip()])
 
 
-def _get_security_packages_via_python_apt() -> set[str] | None:
-    """Use python3-apt (same lib as PackageKit/Cockpit) to identify security packages.
+# PackageKit/Cockpit priority → severity mapping
+_APT_PRIORITY_TO_SEVERITY: dict[str, str] = {
+    "required": "critical",
+    "important": "important",
+    "standard": "moderate",
+    "optional": "low",
+    "extra": "low",
+}
 
-    Returns set of package names whose candidate version comes from a security origin,
-    or None if python3-apt is unavailable.
+
+def _get_package_info_via_python_apt() -> dict[str, dict[str, str]] | None:
+    """Use python3-apt (same library as PackageKit/Cockpit) to get category and severity.
+
+    Returns {pkg_name: {category, severity}} for all upgradable packages, where category
+    and severity follow the Cockpit/PackageKit standard:
+      category: security | bugfix | enhancement | unknown
+      severity: critical | important | moderate | low | unknown
+    Returns None if python3-apt is unavailable.
     """
     script = (
-        "import apt; cache = apt.Cache(); "
-        "print('\\n'.join("
-        "n for n in cache.keys() "
-        "if cache[n].is_upgradable and cache[n].candidate and "
-        "any('security' in (o.origin or '').lower() or "
-        "    'security' in (o.archive or '').lower() "
-        "    for o in cache[n].candidate.origins)"
-        "))"
+        "import apt, json\n"
+        "def cat(pkg):\n"
+        "    for o in pkg.candidate.origins:\n"
+        "        a = (o.archive or '').lower()\n"
+        "        if 'security' in a: return 'security'\n"
+        "        if 'updates' in a: return 'bugfix'\n"
+        "        if 'backports' in a or 'proposed' in a: return 'enhancement'\n"
+        "    return 'unknown'\n"
+        "def sev(pkg):\n"
+        "    p = (pkg.candidate.priority or '').lower()\n"
+        "    return {'required':'critical','important':'important','standard':'moderate',"
+        "            'optional':'low','extra':'low'}.get(p, 'unknown')\n"
+        "cache = apt.Cache()\n"
+        "r = {n: {'category': cat(cache[n]), 'severity': sev(cache[n])}\n"
+        "     for n in cache.keys() if cache[n].is_upgradable and cache[n].candidate}\n"
+        "print(json.dumps(r))\n"
     )
-    output = _run(["python3", "-c", script], timeout=45)
-    if output:
-        return set(output.split("\n"))
-    return None
+    output = _run(["python3", "-c", script], timeout=60)
+    if not output:
+        return None
+    try:
+        return json.loads(output)
+    except (json.JSONDecodeError, ValueError):
+        return None
 
 
 def _get_security_packages_from_lists(target_versions: dict[str, str]) -> set[str]:
@@ -82,10 +107,22 @@ def _get_security_packages_from_lists(target_versions: dict[str, str]) -> set[st
     }
 
 
+def _infer_category_from_source(source: str, is_security: bool) -> str:
+    """Infer PackageKit category from apt source/archive name (fallback when python3-apt unavailable)."""
+    s = source.lower()
+    if is_security or "security" in s:
+        return "security"
+    if "updates" in s:
+        return "bugfix"
+    if "backports" in s or "proposed" in s:
+        return "enhancement"
+    return "unknown"
+
+
 def _collect_apt_upgradable_details(limit: int = 500) -> list[dict[str, object]]:
     upgradable_output = _run(["apt", "list", "--upgradable"], timeout=30)
 
-    # First pass: parse raw items so we have target versions before security check
+    # First pass: parse raw items so we have target versions before info lookup
     raw_items: list[dict[str, object]] = []
     for raw_line in upgradable_output.splitlines()[1:]:
         line = raw_line.strip()
@@ -113,19 +150,33 @@ def _collect_apt_upgradable_details(limit: int = 500) -> list[dict[str, object]]
             "line": line,
         })
 
-    # Determine security packages using python3-apt first, version-list fallback second
-    target_versions = {
-        str(item["identifier"]): str(item["target_version"] or "")
-        for item in raw_items
-    }
-    security_pkgs = _get_security_packages_via_python_apt()
-    if security_pkgs is None:
+    # Get package info via python3-apt (PackageKit/Cockpit standard)
+    pkg_info = _get_package_info_via_python_apt()
+
+    # Fallback: use security package lists when python3-apt is unavailable
+    security_pkgs: set[str] = set()
+    if pkg_info is None:
+        target_versions = {
+            str(item["identifier"]): str(item["target_version"] or "")
+            for item in raw_items
+        }
         security_pkgs = _get_security_packages_from_lists(target_versions)
 
     details: list[dict[str, object]] = []
     for item in raw_items:
         identifier = str(item["identifier"])
         source = str(item["source"])
+
+        if pkg_info is not None:
+            info = pkg_info.get(identifier, {})
+            category = info.get("category", "unknown")
+            severity = info.get("severity", "unknown")
+            is_security = category == "security"
+        else:
+            is_security = identifier in security_pkgs or "security" in source.lower()
+            category = _infer_category_from_source(source, is_security)
+            severity = "important" if is_security else "low"
+
         details.append(
             {
                 "identifier": identifier,
@@ -135,10 +186,9 @@ def _collect_apt_upgradable_details(limit: int = 500) -> list[dict[str, object]]
                 "source": source,
                 "summary": item["line"],
                 "kb_id": None,
-                "security_only": (
-                    identifier in security_pkgs
-                    or "security" in source.lower()
-                ),
+                "security_only": is_security,
+                "category": category,
+                "severity": severity,
                 "installed_at": None,
             }
         )

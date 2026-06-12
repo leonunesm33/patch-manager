@@ -7,6 +7,8 @@ export type AgentInventoryDetailItem = {
   summary: string | null;
   kb_id: string | null;
   security_only: boolean;
+  category: string | null;
+  severity: string | null;
   installed_at: string | null;
 };
 

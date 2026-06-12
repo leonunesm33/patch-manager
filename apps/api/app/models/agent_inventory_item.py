@@ -21,6 +21,8 @@ class AgentInventoryItemModel(Base):
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     kb_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     security_only: Mapped[bool] = mapped_column(Boolean, default=False)
+    category: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    severity: Mapped[str | None] = mapped_column(String(50), nullable=True)
     installed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(

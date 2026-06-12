@@ -29,6 +29,8 @@ class AgentInventoryEntryPayload(BaseModel):
     summary: str | None = None
     kb_id: str | None = None
     security_only: bool = False
+    category: str | None = None
+    severity: str | None = None
     installed_at: datetime | None = None
 
 
@@ -162,6 +164,8 @@ class AgentInventoryDetailItem(BaseModel):
     summary: str | None = None
     kb_id: str | None = None
     security_only: bool = False
+    category: str | None = None
+    severity: str | None = None
     installed_at: datetime | None = None
 
 

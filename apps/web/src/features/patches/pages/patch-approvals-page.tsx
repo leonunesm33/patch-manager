@@ -22,7 +22,8 @@ function getStatusVariant(status: PatchApproval["approval_status"]) {
 
 function getSeverityVariant(severity: string) {
   if (severity === "critical") return "error";
-  if (severity === "high" || severity === "important") return "warn";
+  if (severity === "important" || severity === "high") return "warn";
+  if (severity === "moderate") return "warn";
   return "ok";
 }
 
@@ -30,10 +31,12 @@ function getSeverityLabel(severity: string) {
   const labels: Record<string, string> = {
     low: "baixo",
     medium: "medio",
+    moderate: "moderado",
     high: "alto",
     critical: "critico",
     important: "alto",
     optional: "baixo",
+    unknown: "desconhecido",
   };
   return labels[severity] ?? severity;
 }
@@ -41,12 +44,14 @@ function getSeverityLabel(severity: string) {
 function getCategoryLabel(category: string) {
   const labels: Record<string, string> = {
     security: "seguranca",
-    bugfix: "bug",
+    bugfix: "bug fix",
+    enhancement: "melhoria",
     driver: "driver",
     firmware: "firmware",
     feature: "funcional",
     stability: "estabilidade",
     other: "outros",
+    unknown: "geral",
   };
   return labels[category] ?? category;
 }
@@ -565,7 +570,9 @@ export function PatchApprovalsPage() {
                 >
                   <option value="low">baixo</option>
                   <option value="medium">medio</option>
+                  <option value="moderate">moderado</option>
                   <option value="high">alto</option>
+                  <option value="important">importante</option>
                   <option value="critical">critico</option>
                 </select>
               </label>
@@ -582,7 +589,8 @@ export function PatchApprovalsPage() {
                   }
                 >
                   <option value="security">seguranca</option>
-                  <option value="bugfix">bug</option>
+                  <option value="bugfix">bug fix</option>
+                  <option value="enhancement">melhoria</option>
                   <option value="driver">driver</option>
                   <option value="firmware">firmware</option>
                   <option value="stability">estabilidade</option>

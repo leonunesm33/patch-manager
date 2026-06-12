@@ -1,6 +1,39 @@
-import type { AgentInventoryDetail } from "@/features/agents/types";
+import type { AgentInventoryDetail, AgentInventoryDetailItem } from "@/features/agents/types";
 import { StatusBadge } from "@/components/common/status-badge";
 import { formatDateTimeSaoPaulo } from "@/lib/datetime";
+
+function getCategoryBadgeVariant(item: AgentInventoryDetailItem): "ok" | "warn" | "error" {
+  const cat = item.category ?? (item.security_only ? "security" : "unknown");
+  if (cat === "security") return "warn";
+  return "ok";
+}
+
+function getCategoryBadgeLabel(item: AgentInventoryDetailItem): string {
+  const cat = item.category ?? (item.security_only ? "security" : null);
+  const labels: Record<string, string> = {
+    security: "security",
+    bugfix: "bugfix",
+    enhancement: "enhancement",
+    unknown: "pendente",
+  };
+  return cat ? (labels[cat] ?? cat) : "pendente";
+}
+
+function getSeverityBadgeVariant(severity: string): "ok" | "warn" | "error" {
+  if (severity === "critical") return "error";
+  if (severity === "important" || severity === "moderate") return "warn";
+  return "ok";
+}
+
+function getSeverityBadgeLabel(severity: string): string {
+  const labels: Record<string, string> = {
+    critical: "critico",
+    important: "importante",
+    moderate: "moderado",
+    low: "baixo",
+  };
+  return labels[severity] ?? severity;
+}
 
 type AgentInventoryDetailPanelProps = {
   detail: AgentInventoryDetail | null;
@@ -97,10 +130,15 @@ export function AgentInventoryDetailPanel({
                     </div>
                   ) : null}
                 </div>
-                <div style={{ textAlign: "right" }}>
-                  <StatusBadge variant={item.security_only ? "warn" : "ok"}>
-                    {item.security_only ? "security" : "pending"}
+                <div style={{ textAlign: "right", display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
+                  <StatusBadge variant={getCategoryBadgeVariant(item)}>
+                    {getCategoryBadgeLabel(item)}
                   </StatusBadge>
+                  {item.severity && item.severity !== "unknown" ? (
+                    <StatusBadge variant={getSeverityBadgeVariant(item.severity)}>
+                      {getSeverityBadgeLabel(item.severity)}
+                    </StatusBadge>
+                  ) : null}
                 </div>
               </div>
             ))}
