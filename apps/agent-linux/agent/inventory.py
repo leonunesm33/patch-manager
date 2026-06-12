@@ -53,16 +53,21 @@ def _get_package_info_via_python_apt() -> dict[str, dict[str, str]] | None:
     and severity follow the Cockpit/PackageKit standard:
       category: security | bugfix | enhancement | unknown
       severity: critical | important | moderate | low | unknown
+
+    Security classification mirrors Cockpit behavior: a package is "security" only when
+    its candidate version is exclusively in the security pocket — i.e. NOT also present
+    in jammy-updates (packages promoted to updates are categorized as "bugfix").
     Returns None if python3-apt is unavailable.
     """
     script = (
         "import apt, json\n"
         "def cat(pkg):\n"
-        "    for o in pkg.candidate.origins:\n"
-        "        a = (o.archive or '').lower()\n"
-        "        if 'security' in a: return 'security'\n"
-        "        if 'updates' in a: return 'bugfix'\n"
-        "        if 'backports' in a or 'proposed' in a: return 'enhancement'\n"
+        "    archives = [(o.archive or '').lower() for o in pkg.candidate.origins]\n"
+        "    has_sec = any('security' in a for a in archives)\n"
+        "    has_upd = any('updates' in a for a in archives)\n"
+        "    if has_sec and not has_upd: return 'security'\n"
+        "    if has_upd: return 'bugfix'\n"
+        "    if any('backports' in a or 'proposed' in a for a in archives): return 'enhancement'\n"
         "    return 'unknown'\n"
         "def sev(pkg):\n"
         "    p = (pkg.candidate.priority or '').lower()\n"
@@ -82,37 +87,19 @@ def _get_package_info_via_python_apt() -> dict[str, dict[str, str]] | None:
         return None
 
 
-def _get_security_packages_from_lists(target_versions: dict[str, str]) -> set[str]:
-    """Fallback: match (package, candidate-version) against security repo package lists.
+def _infer_category_from_source(source: str) -> str:
+    """Infer PackageKit category from apt source/archive name (fallback when python3-apt unavailable).
 
-    A package is security if the exact version apt would install is published
-    in a *security* repo list — same logic python-apt uses internally.
+    Mirrors Cockpit's security rule: a package is 'security' only when the source field
+    contains 'security' AND does NOT also contain 'updates' (packages promoted to the
+    updates pocket are categorized as 'bugfix', not 'security').
     """
-    security_versions: dict[str, set[str]] = {}
-    for path in glob.glob("/var/lib/apt/lists/*security*_Packages"):
-        try:
-            current_pkg: str | None = None
-            with open(path, encoding="utf-8", errors="ignore") as f:
-                for line in f:
-                    if line.startswith("Package: "):
-                        current_pkg = line[9:].strip()
-                    elif line.startswith("Version: ") and current_pkg:
-                        security_versions.setdefault(current_pkg, set()).add(line[9:].strip())
-        except OSError:
-            pass
-    return {
-        name
-        for name, ver in target_versions.items()
-        if ver and name in security_versions and ver in security_versions[name]
-    }
-
-
-def _infer_category_from_source(source: str, is_security: bool) -> str:
-    """Infer PackageKit category from apt source/archive name (fallback when python3-apt unavailable)."""
     s = source.lower()
-    if is_security or "security" in s:
+    has_security = "security" in s
+    has_updates = "updates" in s
+    if has_security and not has_updates:
         return "security"
-    if "updates" in s:
+    if has_updates:
         return "bugfix"
     if "backports" in s or "proposed" in s:
         return "enhancement"
@@ -153,15 +140,6 @@ def _collect_apt_upgradable_details(limit: int = 500) -> list[dict[str, object]]
     # Get package info via python3-apt (PackageKit/Cockpit standard)
     pkg_info = _get_package_info_via_python_apt()
 
-    # Fallback: use security package lists when python3-apt is unavailable
-    security_pkgs: set[str] = set()
-    if pkg_info is None:
-        target_versions = {
-            str(item["identifier"]): str(item["target_version"] or "")
-            for item in raw_items
-        }
-        security_pkgs = _get_security_packages_from_lists(target_versions)
-
     details: list[dict[str, object]] = []
     for item in raw_items:
         identifier = str(item["identifier"])
@@ -173,8 +151,10 @@ def _collect_apt_upgradable_details(limit: int = 500) -> list[dict[str, object]]
             severity = info.get("severity", "unknown")
             is_security = category == "security"
         else:
-            is_security = identifier in security_pkgs or "security" in source.lower()
-            category = _infer_category_from_source(source, is_security)
+            # Fallback: infer from the source/archive string in apt list output.
+            # Uses the same "security-only" rule as Cockpit (no python3-apt needed).
+            category = _infer_category_from_source(source)
+            is_security = category == "security"
             severity = "important" if is_security else "low"
 
         details.append(
