@@ -4,7 +4,12 @@ dist/
 apps/agent-windows/dist/*
 !apps/agent-windows/dist/PatchManagerAgentWindows.exe
 build/
+# Variaveis de ambiente reais (so os *.example sao versionados)
 .env
+.env.local
+.env.*.local
+*.env
+!*.env.example
 .venv/
 __pycache__/
 *.pyc
@@ -13,13 +18,26 @@ coverage/
 .DS_Store
 .vscode/
 .idea/
+# Ferramentas de IA / assistentes (manter apenas local, fora do versionamento)
 .codex
 .codex/
+.claude/
+.cursor/
+.aider*
+CLAUDE.local.md
 *.tsbuildinfo
 *:Zone.Identifier
+# Certificados, chaves e segredos
 infra/certs/
 infra/env/api.env
 infra/compose/.env
+*.pem
+*.key
+*.crt
+*.pfx
+*.p12
+*secret*.json
+*credentials*.json
 Patch-manager-estrutura-completa.docx
 Patch-manager-estrutura-completa.pdf
 patch-manager-inicial.html
