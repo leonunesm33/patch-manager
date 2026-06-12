@@ -257,29 +257,31 @@ export function SchedulesPage() {
               </div>
             ) : null}
             {schedules.map((schedule) => (
-              <div key={schedule.id} className="list-item" style={{ opacity: schedule.is_active ? 1 : 0.6 }}>
+              <div key={schedule.id} className="list-item">
                 <div>
-                  <div style={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
-                    {schedule.name}
-                    <span
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 600,
-                        padding: "2px 7px",
-                        borderRadius: 4,
-                        background: schedule.is_active ? "var(--color-success, #2d6a2d)" : "var(--color-muted-bg, #333)",
-                        color: schedule.is_active ? "#a8f0a8" : "var(--color-muted, #999)",
-                      }}
-                    >
-                      {schedule.is_active ? "Ativo" : "Inativo"}
-                    </span>
-                  </div>
-                  <div className="muted" style={{ marginTop: 4 }}>
-                    {scopeLabels[schedule.scope_type] ?? "Escopo"}: {schedule.scope_value || schedule.scope}
-                  </div>
-                  <div className="muted" style={{ marginTop: 6 }}>
-                    Instalacao: {schedule.install_date ? `${schedule.install_date} ` : ""}
-                    <span className="code">{schedule.install_time}</span>
+                  <div style={{ opacity: schedule.is_active ? 1 : 0.6 }}>
+                    <div style={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+                      {schedule.name}
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          padding: "2px 7px",
+                          borderRadius: 4,
+                          background: schedule.is_active ? "var(--color-success, #2d6a2d)" : "var(--color-muted-bg, #333)",
+                          color: schedule.is_active ? "#a8f0a8" : "var(--color-muted, #999)",
+                        }}
+                      >
+                        {schedule.is_active ? "Ativo" : "Inativo"}
+                      </span>
+                    </div>
+                    <div className="muted" style={{ marginTop: 4 }}>
+                      {scopeLabels[schedule.scope_type] ?? "Escopo"}: {schedule.scope_value || schedule.scope}
+                    </div>
+                    <div className="muted" style={{ marginTop: 6 }}>
+                      Instalacao: {schedule.install_date ? `${schedule.install_date} ` : ""}
+                      <span className="code">{schedule.install_time}</span>
+                    </div>
                   </div>
                   <div style={{ marginTop: 10 }}>
                     <ActionMenu
@@ -302,7 +304,7 @@ export function SchedulesPage() {
                     />
                   </div>
                 </div>
-                <div style={{ textAlign: "right" }}>
+                <div style={{ textAlign: "right", opacity: schedule.is_active ? 1 : 0.6 }}>
                   <div className="code">{schedule.cron_label}</div>
                   <div className="muted" style={{ marginTop: 4 }}>
                     Frequencia: {recurrenceLabels[schedule.recurrence] ?? schedule.recurrence}
