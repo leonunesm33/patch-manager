@@ -121,6 +121,7 @@ class PatchCycleService:
         machines = machines if machines is not None else self.machine_repository.list_all()
         now = now or datetime.now(ZoneInfo("America/Sao_Paulo"))
         commands: list[AgentCommandModel] = []
+        reboot_commands_reset = 0
 
         for schedule in schedules:
             if not schedule.is_active:
@@ -138,7 +139,19 @@ class PatchCycleService:
                     continue
 
                 command_id = self._scheduled_reboot_command_id(schedule.id, agent_id, period_key)
-                if self.agent_command_repository.get_by_id(command_id) is not None:
+                existing = self.agent_command_repository.get_by_id(command_id)
+                if existing is not None:
+                    if existing.status == "failed":
+                        # Reset failed command so the agent retries
+                        existing.status = "pending"
+                        self.agent_command_repository.add(existing)
+                        self.snapshot_repository.update_post_patch_state(
+                            agent_id,
+                            post_patch_state="reboot-scheduled",
+                            post_patch_message=f"Reboot re-enfileirado pela janela {schedule.name} (tentativa anterior falhou).",
+                            reboot_scheduled_at=datetime.now(UTC),
+                        )
+                        reboot_commands_reset += 1
                     continue
 
                 commands.append(
@@ -170,7 +183,7 @@ class PatchCycleService:
 
         for command in commands:
             self.agent_command_repository.add(command)
-        return len(commands)
+        return len(commands) + reboot_commands_reset
 
     def process_pending_jobs(self) -> PatchJobProcessResponse:
         machines = self.machine_repository.list_all()
@@ -444,7 +457,7 @@ class PatchCycleService:
             return False
         return bool(
             snapshot.reboot_required
-            or snapshot.post_patch_state in {"reboot-required", "reboot-scheduled"}
+            or snapshot.post_patch_state in {"reboot-required", "reboot-scheduled", "reboot-failed"}
         )
 
     def _scheduled_reboot_command_id(self, schedule_id: str, agent_id: str, period_key: str) -> str:
