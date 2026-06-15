@@ -44,7 +44,7 @@ if (-not $env:PATCH_MANAGER_ENV_FILE -and (Test-Path $DefaultEnvFile)) {
 }
 
 if (Test-Path $ExePath) {
-  & $ExePath
+  & $ExePath run
   exit $LASTEXITCODE
 }
 

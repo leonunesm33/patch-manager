@@ -433,6 +433,7 @@ def _build_windows_installer_script(server_url: str, bootstrap_token: str) -> st
         "agent/inventory.py": _read_agent_windows_file("agent/inventory.py"),
         "agent/executor.py": _read_agent_windows_file("agent/executor.py"),
         "agent/main.py": _read_agent_windows_file("agent/main.py"),
+        "agent/service.py": _read_agent_windows_file("agent/service.py"),
         "agent/run-agent.ps1": _read_agent_windows_file("agent/run-agent.ps1"),
     }
 
@@ -457,16 +458,18 @@ $ServerUrl = "{server_url.rstrip('/')}"
 $BootstrapToken = "{bootstrap_token}"
 $InstallRoot = "C:\\ProgramData\\PatchManager\\agent-windows"
 $EnvTarget = "C:\\ProgramData\\PatchManager\\agent-windows.env"
-$TaskName = "PatchManagerAgentWindows"
+$ServiceName = "PatchManagerAgent"
 $LogFile = "C:\\ProgramData\\PatchManager\\agent-windows.log"
 $AgentId = "windows-$($env:COMPUTERNAME.ToLower() -replace '[^a-z0-9]+','-')"
-$CurrentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-$PowerShellExecutable = Join-Path $env:SystemRoot "System32\\WindowsPowerShell\\v1.0\\powershell.exe"
 
 function Test-IsAdministrator {{
   $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
   $principal = New-Object System.Security.Principal.WindowsPrincipal($identity)
   return $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
+}}
+
+if (-not (Test-IsAdministrator)) {{
+  throw "A instalacao do servico requer privilegio administrativo. Execute o PowerShell como Administrador."
 }}
 
 $null = New-Item -ItemType Directory -Force -Path $InstallRoot
@@ -502,29 +505,15 @@ PATCH_MANAGER_LOG_FILE=$LogFile
 
 [System.Environment]::SetEnvironmentVariable("PATCH_MANAGER_ENV_FILE", $EnvTarget, "Machine")
 
-$action = New-ScheduledTaskAction -Execute $PowerShellExecutable -Argument "-ExecutionPolicy Bypass -File agent\\run-agent.ps1" -WorkingDirectory $InstallRoot
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
-
-if (Test-IsAdministrator) {{
-  $trigger = New-ScheduledTaskTrigger -AtStartup
-  $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -RunLevel Highest -LogonType ServiceAccount
-  Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
-  Write-Host "Task registrada para SYSTEM com inicio no boot."
-}} else {{
-  $trigger = New-ScheduledTaskTrigger -AtLogOn -User $CurrentUser
-  Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -User $CurrentUser -Force | Out-Null
-  Write-Host "PowerShell sem privilegio administrativo detectado."
-  Write-Host "Task registrada para o usuario atual ($CurrentUser) com inicio no logon."
-}}
-
-Start-ScheduledTask -TaskName $TaskName
+& $AgentExeTarget install | Out-Null
+sc.exe failure $ServiceName reset= 86400 actions= restart/5000/restart/30000/restart/60000 | Out-Null
+Start-Service -Name $ServiceName
 
 Write-Host "Instalacao concluida."
 Write-Host "Agent ID: $AgentId"
-Write-Host "Launcher da task: agent\\run-agent.ps1"
 Write-Host "Aguardando aprovacao no painel do Patch Manager."
 Write-Host "Arquivo de ambiente: $EnvTarget"
-Write-Host "Task agendada: $TaskName"
+Write-Host "Servico registrado: $ServiceName"
 """
 
 
@@ -536,6 +525,7 @@ def _build_windows_upgrade_script(server_url: str) -> str:
         "agent/inventory.py": _read_agent_windows_file("agent/inventory.py"),
         "agent/executor.py": _read_agent_windows_file("agent/executor.py"),
         "agent/main.py": _read_agent_windows_file("agent/main.py"),
+        "agent/service.py": _read_agent_windows_file("agent/service.py"),
         "agent/run-agent.ps1": _read_agent_windows_file("agent/run-agent.ps1"),
     }
 
@@ -559,31 +549,22 @@ $ErrorActionPreference = 'Stop'
 $ServerUrl = "{server_url.rstrip('/')}"
 $InstallRoot = "C:\\ProgramData\\PatchManager\\agent-windows"
 $EnvTarget = "C:\\ProgramData\\PatchManager\\agent-windows.env"
-$TaskName = "PatchManagerAgentWindows"
-$PowerShellExecutable = Join-Path $env:SystemRoot "System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+$ServiceName = "PatchManagerAgent"
+$OldTaskName = "PatchManagerAgentWindows"
 
 if (-not (Test-Path $InstallRoot)) {{
   throw "InstallRoot nao encontrado. Rode a instalacao inicial primeiro."
 }}
 
+# Parar e remover task agendada antiga (migracao de versoes anteriores)
 try {{
-  Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue | Out-Null
+  Stop-ScheduledTask -TaskName $OldTaskName -ErrorAction SilentlyContinue | Out-Null
 }} catch {{}}
+Unregister-ScheduledTask -TaskName $OldTaskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
 
-Start-Sleep -Seconds 2
-
-Get-Process -Name "PatchManagerAgentWindows" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-
-Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" -ErrorAction SilentlyContinue |
-  Where-Object {{
-    $_.CommandLine -like "*PatchManagerAgentWindows*" -or
-    $_.CommandLine -like "*run-agent.ps1*"
-  }} |
-  ForEach-Object {{
-    Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
-  }}
-
-Start-Sleep -Seconds 1
+# Parar o servico para permitir substituicao dos arquivos
+Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue | Out-Null
+Start-Sleep -Seconds 3
 
 {joined_blocks}
 
@@ -627,22 +608,17 @@ if ($existing -notmatch 'PATCH_MANAGER_LOG_FILE=') {{
   Add-Content -Path $EnvTarget -Value "PATCH_MANAGER_LOG_FILE=C:\\ProgramData\\PatchManager\\agent-windows.log"
 }}
 
-$action = New-ScheduledTaskAction -Execute $PowerShellExecutable -Argument "-ExecutionPolicy Bypass -File agent\\run-agent.ps1" -WorkingDirectory $InstallRoot
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
-Set-ScheduledTask -TaskName $TaskName -Action $action -Settings $settings | Out-Null
-
-try {{
-  Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue | Out-Null
-}} catch {{}}
-try {{
-  Start-ScheduledTask -TaskName $TaskName
-}} catch {{
-  Write-Host "Nao foi possivel iniciar a task automaticamente. Tente iniciar manualmente ou faca logoff/logon."
+# Registrar servico se ainda nao estiver instalado
+$svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+if ($null -eq $svc) {{
+  & $AgentExeTarget install | Out-Null
+  sc.exe failure $ServiceName reset= 86400 actions= restart/5000/restart/30000/restart/60000 | Out-Null
 }}
 
+Start-Service -Name $ServiceName
+
 Write-Host "Atualizacao concluida."
-Write-Host "Launcher da task: agent\\run-agent.ps1"
-Write-Host "Task reiniciada: $TaskName"
+Write-Host "Servico reiniciado: $ServiceName"
 """
 
 

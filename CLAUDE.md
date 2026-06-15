@@ -146,17 +146,31 @@ Windows upgrade:
 powershell -ExecutionPolicy Bypass -Command "irm 'https://<central>/api/v1/agents/install/windows-upgrade.ps1?server_url=https%3A%2F%2F<central>' | iex"
 ```
 
-Windows task:
+Windows service (Windows Server 2012+):
 
-- nome: `PatchManagerAgentWindows`
+- nome do servico: `PatchManagerAgent`
+- display: `Patch Manager Agent`
 - pasta: `C:\ProgramData\PatchManager\agent-windows`
+- exe: `C:\ProgramData\PatchManager\agent-windows\dist\PatchManagerAgentWindows.exe`
 - env: `C:\ProgramData\PatchManager\agent-windows.env`
+- gerenciar: `Start-Service PatchManagerAgent` / `Stop-Service PatchManagerAgent`
+- registrar manualmente: `PatchManagerAgentWindows.exe install`
+- remover manualmente: `PatchManagerAgentWindows.exe remove`
+- diagnostico manual (fora do servico): `PatchManagerAgentWindows.exe run`
 
 Flags importantes do agente Windows:
 
 - `PATCH_MANAGER_ENABLE_WINDOWS_HOST_REBOOT=true`
 - `PATCH_MANAGER_SIMULATE_WINDOWS_HOST_REBOOT=true` para teste seguro
 - `PATCH_MANAGER_SIMULATE_WINDOWS_HOST_REBOOT=false` somente para reboot real autorizado
+
+Build do exe (requer pywin32 instalado):
+
+```powershell
+py -3 -m pip install pywin32 pyinstaller
+cd "D:\Patch Manager\apps\agent-windows\deploy"
+.\build-standalone-exe.ps1
+```
 
 ## Fluxos implementados recentemente
 

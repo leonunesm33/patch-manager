@@ -183,10 +183,11 @@ def _sleep_until(stop_event: threading.Event, seconds: int) -> bool:
     return stop_event.wait(seconds)
 
 
-def main() -> None:
+def main(stop_event: threading.Event | None = None) -> None:
     config = load_config()
     logger = configure_logging(config)
-    stop_event = threading.Event()
+    if stop_event is None:
+        stop_event = threading.Event()
     last_inventory_sync = 0.0
     last_heartbeat = 0.0
 
