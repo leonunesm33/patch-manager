@@ -693,7 +693,28 @@ def enroll_agent(
         kernel_version=payload.kernel_version,
         agent_version=payload.agent_version,
     )
-    if enrollment.status == "approved" and enrollment.issued_key:
+    if enrollment.status == "approved":
+        if not enrollment.issued_key:
+            # Previously active agent lost its key — generate a new one automatically
+            issued_key = secrets.token_urlsafe(24)
+            credential_repository = AgentCredentialRepository(db)
+            credential = credential_repository.get_by_agent_id(enrollment.agent_id)
+            if credential is None:
+                credential_repository.add(
+                    AgentCredentialModel(
+                        agent_id=enrollment.agent_id,
+                        platform=enrollment.platform,
+                        description=f"Auto-renewed key for {enrollment.hostname}",
+                        key_hash=hash_password(issued_key),
+                        is_active=True,
+                    )
+                )
+            else:
+                credential.key_hash = hash_password(issued_key)
+                credential.is_active = True
+                db.add(credential)
+                db.commit()
+            enrollment = repository.approve(enrollment, issued_key)
         issued_key = enrollment.issued_key
         repository.mark_active(enrollment)
         return AgentEnrollmentStatusResponse(

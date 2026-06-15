@@ -88,7 +88,9 @@ def _get_package_info_via_python_apt() -> dict[str, dict[str, str]] | None:
     if not output:
         return None
     try:
-        return json.loads(output)
+        # apt_pkg writes progress messages to stdout before the JSON; use the last line
+        last_line = output.strip().split("\n")[-1]
+        return json.loads(last_line)
     except (json.JSONDecodeError, ValueError):
         return None
 
