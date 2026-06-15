@@ -18,6 +18,7 @@ import type {
   MachineGroup,
   MachineOperationalDetails,
 } from "@/features/machines/types";
+import { Pagination, usePagination } from "@/components/common/pagination";
 import { StatusBadge } from "@/components/common/status-badge";
 import { formatDateTimeSaoPaulo } from "@/lib/datetime";
 import { useNavigate } from "react-router-dom";
@@ -274,6 +275,7 @@ export function MachinesPage() {
     managementFilter !== "all",
   ].filter(Boolean).length;
   const shouldShowOperationalDetails = detailsLoading || detailsError || machineDetails;
+  const machinesPagination = usePagination(filteredMachines);
 
   return (
     <div className="single-panel-grid">
@@ -655,7 +657,7 @@ export function MachinesPage() {
                 </td>
               </tr>
             ) : null}
-            {filteredMachines.map((machine) => (
+            {machinesPagination.pageItems.map((machine) => (
               <tr key={machine.id}>
                 <td style={{ fontWeight: 700 }}>{machine.name}</td>
                 <td className="code">{machine.ip}</td>
@@ -742,6 +744,14 @@ export function MachinesPage() {
             ))}
           </tbody>
         </table>
+        <Pagination
+          page={machinesPagination.page}
+          totalPages={machinesPagination.totalPages}
+          from={machinesPagination.from}
+          to={machinesPagination.to}
+          total={machinesPagination.total}
+          onPageChange={machinesPagination.setPage}
+        />
       </section>
     </div>
   );

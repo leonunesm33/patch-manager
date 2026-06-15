@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchPatchJobs, fetchReports } from "@/features/reports/api";
+import { Pagination, usePagination } from "@/components/common/pagination";
 import { StatusBadge } from "@/components/common/status-badge";
 import { formatDateTimeSaoPaulo, formatTimeSaoPaulo } from "@/lib/datetime";
 import type { PatchJobItem, ReportItem } from "@/features/reports/types";
@@ -57,6 +58,9 @@ export function ReportsPage() {
   const successfulExecutions = rows.filter((row) => row.result === "applied" || row.result === "completed");
   const failedExecutions = rows.filter((row) => row.result === "failed");
   const totalFailures = failedJobs.length + failedExecutions.length;
+  const installedPagination = usePagination(successfulExecutions);
+  const jobsPagination = usePagination(jobs);
+  const rowsPagination = usePagination(rows);
 
   useEffect(() => {
     let active = true;
@@ -369,7 +373,7 @@ export function ReportsPage() {
                 </td>
               </tr>
             ) : null}
-            {successfulExecutions.map((row, idx) => (
+            {installedPagination.pageItems.map((row, idx) => (
               <tr key={`${row.date}-${row.machine}-${row.patch}-${idx}`}>
                 <td className="code">{row.date}</td>
                 <td className="code">{row.patch}</td>
@@ -382,6 +386,14 @@ export function ReportsPage() {
             ))}
           </tbody>
         </table>
+        <Pagination
+          page={installedPagination.page}
+          totalPages={installedPagination.totalPages}
+          from={installedPagination.from}
+          to={installedPagination.to}
+          total={installedPagination.total}
+          onPageChange={installedPagination.setPage}
+        />
       </section>
 
       <section className="panel section">
@@ -409,7 +421,7 @@ export function ReportsPage() {
                 </td>
               </tr>
             ) : null}
-            {jobs.map((job) => (
+            {jobsPagination.pageItems.map((job) => (
               <tr key={job.id}>
                 <td className="code">{formatDateTimeSaoPaulo(job.created_at)}</td>
                 <td>{job.schedule_name}</td>
@@ -441,6 +453,14 @@ export function ReportsPage() {
             ))}
           </tbody>
         </table>
+        <Pagination
+          page={jobsPagination.page}
+          totalPages={jobsPagination.totalPages}
+          from={jobsPagination.from}
+          to={jobsPagination.to}
+          total={jobsPagination.total}
+          onPageChange={jobsPagination.setPage}
+        />
       </section>
 
       <section className="panel section">
@@ -469,7 +489,7 @@ export function ReportsPage() {
                 </td>
               </tr>
             ) : null}
-            {rows.map((row, idx) => (
+            {rowsPagination.pageItems.map((row, idx) => (
               <tr key={`${row.date}-${row.machine}-${row.patch}-${idx}`}>
                 <td className="code">{row.date}</td>
                 <td>{row.schedule}</td>
@@ -487,6 +507,14 @@ export function ReportsPage() {
             ))}
           </tbody>
         </table>
+        <Pagination
+          page={rowsPagination.page}
+          totalPages={rowsPagination.totalPages}
+          from={rowsPagination.from}
+          to={rowsPagination.to}
+          total={rowsPagination.total}
+          onPageChange={rowsPagination.setPage}
+        />
       </section>
     </div>
   );

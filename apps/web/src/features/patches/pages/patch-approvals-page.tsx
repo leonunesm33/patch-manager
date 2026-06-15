@@ -11,6 +11,7 @@ import {
 import { fetchReports } from "@/features/reports/api";
 import { ActionMenu } from "@/components/common/action-menu";
 import { ConfirmModal } from "@/components/common/confirm-modal";
+import { Pagination, usePagination } from "@/components/common/pagination";
 import { StatusBadge } from "@/components/common/status-badge";
 import { formatDateTimeSaoPaulo } from "@/lib/datetime";
 import type { PatchApproval, PatchCategory, PatchCreate, PatchSeverity } from "@/features/patches/types";
@@ -169,6 +170,9 @@ export function PatchApprovalsPage() {
   const pendingPatches = filteredPatches.filter((patch) => patch.approval_status === "pending");
   const managedPatches = filteredPatches.filter((patch) => patch.approval_status !== "pending");
   const installedExecutions = executions.filter((e) => e.result === "applied");
+  const pendingPagination = usePagination(pendingPatches);
+  const managedPagination = usePagination(managedPatches);
+  const installedPagination = usePagination(installedExecutions);
   const categoryOptions = uniqueValues(patches.map((patch) => patch.category));
   const severityOptions = uniqueValues(patches.map((patch) => patch.severity));
   const platformOptions = uniqueValues(
@@ -499,11 +503,19 @@ export function PatchApprovalsPage() {
           </p>
         ) : null}
         {renderPatchTable(
-          pendingPatches,
+          pendingPagination.pageItems,
           machineIdFilter
             ? "Este host reportou pendencias no resumo, mas ainda nao enviou patches pendentes para o filtro atual."
             : "Nenhum patch pendente para o filtro atual.",
         )}
+        <Pagination
+          page={pendingPagination.page}
+          totalPages={pendingPagination.totalPages}
+          from={pendingPagination.from}
+          to={pendingPagination.to}
+          total={pendingPagination.total}
+          onPageChange={pendingPagination.setPage}
+        />
       </section>
 
       <section className="panel section">
@@ -513,7 +525,15 @@ export function PatchApprovalsPage() {
             {loading ? "Carregando da API..." : `${managedPatches.length} aprovados ou rejeitados`}
           </span>
         </div>
-        {renderPatchTable(managedPatches, "Nenhum patch aprovado ou rejeitado para o filtro atual.")}
+        {renderPatchTable(managedPagination.pageItems, "Nenhum patch aprovado ou rejeitado para o filtro atual.")}
+        <Pagination
+          page={managedPagination.page}
+          totalPages={managedPagination.totalPages}
+          from={managedPagination.from}
+          to={managedPagination.to}
+          total={managedPagination.total}
+          onPageChange={managedPagination.setPage}
+        />
       </section>
 
       <section className="panel section">
@@ -543,7 +563,7 @@ export function PatchApprovalsPage() {
                 </td>
               </tr>
             ) : null}
-            {installedExecutions.map((exec, idx) => (
+            {installedPagination.pageItems.map((exec, idx) => (
               <tr key={`${exec.date}-${exec.machine}-${exec.patch}-${idx}`}>
                 <td className="code">{exec.date}</td>
                 <td className="code">{exec.patch}</td>
@@ -560,6 +580,14 @@ export function PatchApprovalsPage() {
             ))}
           </tbody>
         </table>
+        <Pagination
+          page={installedPagination.page}
+          totalPages={installedPagination.totalPages}
+          from={installedPagination.from}
+          to={installedPagination.to}
+          total={installedPagination.total}
+          onPageChange={installedPagination.setPage}
+        />
       </section>
 
       {showPatchForm || editingId ? (

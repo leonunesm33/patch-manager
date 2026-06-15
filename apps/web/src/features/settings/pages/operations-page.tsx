@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ActionMenu } from "@/components/common/action-menu";
+import { Pagination, usePagination } from "@/components/common/pagination";
 import { StatCard } from "@/components/common/stat-card";
 import { StatusBadge } from "@/components/common/status-badge";
 import { formatDateTimeSaoPaulo } from "@/lib/datetime";
@@ -421,6 +422,11 @@ export function OperationsPage() {
   const pendingPatchJobs = patchJobs.filter((job) => job.status === "pending");
   const runningPatchJobs = patchJobs.filter((job) => job.status === "running");
   const failedPatchJobs = patchJobs.filter((job) => job.status === "failed");
+  const connectedPagination = usePagination(connectedAgents);
+  const pendingEnrollPagination = usePagination(pendingEnrollments);
+  const rejectedEnrollPagination = usePagination(rejectedEnrollments);
+  const revokedPagination = usePagination(revokedAgents);
+  const commandsPagination = usePagination(recentCommands);
 
   return (
     <div>
@@ -744,7 +750,7 @@ export function OperationsPage() {
               <div className="muted">Nenhum agente conectado agora.</div>
             </div>
           ) : null}
-          {connectedAgents.map((agent) => (
+          {connectedPagination.pageItems.map((agent) => (
             <div key={agent.agent_id} className="list-item">
               <div>
                 <label style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 700 }}>
@@ -789,6 +795,14 @@ export function OperationsPage() {
             </div>
           ))}
         </div>
+        <Pagination
+          page={connectedPagination.page}
+          totalPages={connectedPagination.totalPages}
+          from={connectedPagination.from}
+          to={connectedPagination.to}
+          total={connectedPagination.total}
+          onPageChange={connectedPagination.setPage}
+        />
       </section>
 
       <section className="content-grid">
@@ -821,7 +835,7 @@ export function OperationsPage() {
                 <div className="muted">Nenhum agente pendente agora.</div>
               </div>
             ) : null}
-            {pendingEnrollments.map((agent) => (
+            {pendingEnrollPagination.pageItems.map((agent) => (
               <div key={agent.agent_id} className="list-item">
                 <div>
                   <label style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 700 }}>
@@ -864,6 +878,14 @@ export function OperationsPage() {
               </div>
             ))}
           </div>
+          <Pagination
+            page={pendingEnrollPagination.page}
+            totalPages={pendingEnrollPagination.totalPages}
+            from={pendingEnrollPagination.from}
+            to={pendingEnrollPagination.to}
+            total={pendingEnrollPagination.total}
+            onPageChange={pendingEnrollPagination.setPage}
+          />
         </section>
 
         <section className="panel section">
@@ -887,7 +909,7 @@ export function OperationsPage() {
                 <div className="muted">Nenhum agente rejeitado agora.</div>
               </div>
             ) : null}
-            {rejectedEnrollments.map((agent) => (
+            {rejectedEnrollPagination.pageItems.map((agent) => (
               <div key={agent.agent_id} className="list-item">
                 <div>
                   <label style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 700 }}>
@@ -924,6 +946,14 @@ export function OperationsPage() {
               </div>
             ))}
           </div>
+          <Pagination
+            page={rejectedEnrollPagination.page}
+            totalPages={rejectedEnrollPagination.totalPages}
+            from={rejectedEnrollPagination.from}
+            to={rejectedEnrollPagination.to}
+            total={rejectedEnrollPagination.total}
+            onPageChange={rejectedEnrollPagination.setPage}
+          />
         </section>
 
         <section className="panel section">
@@ -947,7 +977,7 @@ export function OperationsPage() {
                 <div className="muted">Nenhum agente revogado no momento.</div>
               </div>
             ) : null}
-            {revokedAgents.map((agent) => (
+            {revokedPagination.pageItems.map((agent) => (
               <div key={agent.agent_id} className="list-item">
                 <div>
                   <label style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 700 }}>
@@ -987,6 +1017,14 @@ export function OperationsPage() {
               </div>
             ))}
           </div>
+          <Pagination
+            page={revokedPagination.page}
+            totalPages={revokedPagination.totalPages}
+            from={revokedPagination.from}
+            to={revokedPagination.to}
+            total={revokedPagination.total}
+            onPageChange={revokedPagination.setPage}
+          />
         </section>
       </section>
 
@@ -1001,7 +1039,7 @@ export function OperationsPage() {
               <div className="muted">Nenhum comando operacional emitido ainda.</div>
             </div>
           ) : null}
-          {recentCommands.map((command) => (
+          {commandsPagination.pageItems.map((command) => (
             <div key={command.id} className="list-item">
               <div>
                 <div style={{ fontWeight: 700 }}>
@@ -1030,6 +1068,14 @@ export function OperationsPage() {
             </div>
           ))}
         </div>
+        <Pagination
+          page={commandsPagination.page}
+          totalPages={commandsPagination.totalPages}
+          from={commandsPagination.from}
+          to={commandsPagination.to}
+          total={commandsPagination.total}
+          onPageChange={commandsPagination.setPage}
+        />
       </section>
     </div>
   );
