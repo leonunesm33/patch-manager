@@ -405,6 +405,15 @@ done
 sudo chown root:patchmanager "${{ENV_TARGET}}"
 sudo chmod 660 "${{ENV_TARGET}}"
 sudo install -m 644 "${{INSTALL_ROOT}}/deploy/patch-manager-agent-linux.service" "${{SERVICE_TARGET}}"
+
+# Ensure sudoers rule exists for scheduled reboots
+SUDOERS_FILE="/etc/sudoers.d/patch-manager-shutdown"
+SUDOERS_RULE="patchmanager ALL=(root) NOPASSWD: /usr/sbin/shutdown"
+if ! grep -qF "${{SUDOERS_RULE}}" "${{SUDOERS_FILE}}" 2>/dev/null; then
+  echo "${{SUDOERS_RULE}}" | sudo tee "${{SUDOERS_FILE}}" > /dev/null
+  sudo chmod 440 "${{SUDOERS_FILE}}"
+fi
+
 sudo chown -R patchmanager:patchmanager "${{INSTALL_ROOT}}" /var/log/patch-manager
 sudo systemctl daemon-reload
 sudo systemctl restart "${{SERVICE_NAME}}"
