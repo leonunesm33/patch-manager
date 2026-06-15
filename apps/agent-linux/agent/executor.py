@@ -120,7 +120,7 @@ def handle_post_apply_reboot(
         return True, f"Simulacao de reboot Linux para daqui {reboot_grace_minutes} minutos. Nenhum shutdown foi executado."
 
     code, output = _run(
-        ["shutdown", "-r", f"+{reboot_grace_minutes}"],
+        ["sudo", "shutdown", "-r", f"+{reboot_grace_minutes}"],
         timeout=config.reboot_command_timeout_seconds,
     )
     if code == 0:
@@ -143,7 +143,7 @@ def execute_manual_reboot_command(
         return "applied", "Simulacao de reboot Linux manual. Nenhum shutdown foi executado."
 
     code, output = _run(
-        ["shutdown", "-r", "+1"],
+        ["sudo", "shutdown", "-r", "+1"],
         timeout=config.reboot_command_timeout_seconds,
     )
     if code == 0:

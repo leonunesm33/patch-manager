@@ -22,6 +22,12 @@ fi
 
 sudo install -m 644 "${INSTALL_ROOT}/deploy/${SERVICE_NAME}" "${SERVICE_TARGET}"
 sudo chown -R patchmanager:patchmanager "${INSTALL_ROOT}" /var/log/patch-manager
+
+# Allow patchmanager to schedule reboots via shutdown without a password prompt
+echo 'patchmanager ALL=(root) NOPASSWD: /usr/sbin/shutdown' \
+  | sudo tee /etc/sudoers.d/patch-manager-shutdown > /dev/null
+sudo chmod 440 /etc/sudoers.d/patch-manager-shutdown
+
 sudo systemctl daemon-reload
 
 echo "Instalacao concluida."

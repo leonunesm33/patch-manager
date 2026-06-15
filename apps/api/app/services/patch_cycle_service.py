@@ -70,7 +70,12 @@ class PatchCycleService:
 
             for schedule in related_schedules:
                 for machine in self._select_job_machines(schedule, patch, machines):
-                    if self.patch_job_repository.exists_job(schedule.id, machine.id, patch.id):
+                    # Block duplicates only for non-failed jobs created today.
+                    # Failed jobs can be retried within the same window.
+                    window_start = datetime.combine(now.date(), time.min, tzinfo=now.tzinfo).astimezone(UTC)
+                    if self.patch_job_repository.exists_active_or_completed_job_since(
+                        schedule.id, machine.id, patch.id, window_start
+                    ):
                         continue
                     enqueued_jobs.append(
                         PatchJobModel(

@@ -12,7 +12,6 @@ EnvironmentFile=/etc/patch-manager/agent-linux.env
 ExecStart=/usr/bin/python3 /opt/patch-manager/agent-linux/agent/main.py
 Restart=on-failure
 RestartSec=10
-NoNewPrivileges=true
 PrivateTmp=true
 
 [Install]
