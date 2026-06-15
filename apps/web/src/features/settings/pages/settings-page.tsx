@@ -330,18 +330,18 @@ export function SettingsPage() {
           <section className="panel section settings-tile">
             <div className="section-header">
               <h3 className="section-title">Orquestracao do scheduler</h3>
-              <InfoHint text="Controla a fila de jobs e o worker interno que processa agendamentos." />
+              <InfoHint text="Dispara jobs nos horarios agendados e entrega aos agentes. Pausar aqui congela toda execucao de patches — use apenas para manutencao da central." />
             </div>
             {schedulerStatus ? (
               <div className="compact-setting-list">
                 <div className="setting-row">
-                  <SettingTitle help="Intervalo usado para procurar agendamentos e enfileirar jobs.">
+                  <SettingTitle help="Com que frequencia a central verifica os agendamentos ativos e cria novos jobs para execucao.">
                     Enfileiramento
                   </SettingTitle>
                   <span className="code">{schedulerStatus.enqueue_interval_seconds}s</span>
                 </div>
                 <div className="setting-row">
-                  <SettingTitle help="Intervalo do worker que processa um job por vez.">
+                  <SettingTitle help="Com que frequencia a central entrega o proximo job pendente para um agente executar.">
                     Worker
                   </SettingTitle>
                   <span className="code">{schedulerStatus.worker_interval_seconds}s</span>
@@ -374,7 +374,7 @@ export function SettingsPage() {
             <div className="form-grid">
               <label>
                 <span className="field-label">
-                  Bootstrap token <InfoHint text="Token inicial usado pelos agentes durante o primeiro cadastro." />
+                  Bootstrap token <InfoHint text="Senha temporaria usada por novos agentes na primeira conexao com a central. Compartilhe apenas durante a instalacao — rotacione apos uso em lote para impedir novos cadastros nao autorizados." />
                 </span>
                 <input
                   className="input"
@@ -385,7 +385,7 @@ export function SettingsPage() {
               </label>
               <label>
                 <span className="field-label">
-                  URL publica do servidor <InfoHint text="Endereco usado pelos instaladores dos agentes para chegar na central." />
+                  URL publica do servidor <InfoHint text="Endereco HTTPS desta central acessivel pelos hosts gerenciados. E usado nos comandos de instalacao dos agentes e nas chamadas de heartbeat e inventario." />
                 </span>
                 <input
                   className="input"
@@ -396,7 +396,7 @@ export function SettingsPage() {
               </label>
               <label>
                 <span className="field-label">
-                  Expiracao do token <InfoHint text="Quantidade de dias ate o token bootstrap expirar." />
+                  Expiracao do token <InfoHint text="Apos esse prazo, o token expira e novos agentes nao conseguem se cadastrar. Rotacione ou renove antes do vencimento se ainda houver maquinas a instalar." />
                 </span>
                 <input
                   className="input"
@@ -437,7 +437,7 @@ export function SettingsPage() {
           <section className="panel section settings-tile">
             <div className="section-header">
               <h3 className="section-title">Modo do agente</h3>
-              <InfoHint text="dry-run apenas inspeciona. apply executa conforme guardrails configurados." />
+              <InfoHint text="dry-run: apenas coleta inventario e simula, sem instalar nada — ideal para validar antes de habilitar patches reais. apply: executa a instalacao das atualizacoes aprovadas segundo as politicas abaixo." />
             </div>
             <div className="segmented-actions">
               {(["dry-run", "apply"] as const).map((mode) => (
@@ -467,7 +467,7 @@ export function SettingsPage() {
               ) : null}
               {(settings?.execution.linux_group_modes ?? []).map((item) => (
                 <div key={item.group_name} className="setting-row">
-                  <SettingTitle help={item.uses_default ? "Segue a politica Linux global." : "Override persistido para este grupo."}>
+                  <SettingTitle help={item.uses_default ? "Herda o modo global definido acima (apply ou dry-run). Para sobrescrever, selecione um modo especifico." : "Modo especifico para este grupo — substitui o modo global. Util para promover grupos gradualmente sem afetar todos os hosts."}>
                     {item.group_name}
                   </SettingTitle>
                   <div className="segmented-actions">
@@ -496,7 +496,7 @@ export function SettingsPage() {
             <div className="content-grid">
               <div className="compact-setting-list">
                 <div className="setting-row">
-                  <SettingTitle help={realApplyAuditLabel}>Apply real</SettingTitle>
+                  <SettingTitle help={`Chave mestra: quando desligado, nenhum job Linux instala nada de verdade, mesmo com modo 'apply' ativo — age como dry-run. Ligue somente apos validar allowlist, timeout e ambiente. ${realApplyAuditLabel}`}>Apply real</SettingTitle>
                   <button
                     className={settings?.execution.real_apply_enabled ? "btn btn-primary" : "btn"}
                     disabled={executionLoading}
@@ -507,7 +507,7 @@ export function SettingsPage() {
                   </button>
                 </div>
                 <div className="setting-row">
-                  <SettingTitle help="Restringe apply real a candidatos com indicio de origem security.">
+                  <SettingTitle help="Quando ligado, instala apenas pacotes classificados como 'security' (ex: vindos do repositorio jammy-security). Patches de bugfix e enhancement sao ignorados — util para ambientes que so aceitam correcoes criticas.">
                     Somente seguranca
                   </SettingTitle>
                   <button
@@ -532,7 +532,7 @@ export function SettingsPage() {
                   </button>
                 </div>
                 <div className="setting-row">
-                  <SettingTitle help="Tratamento de reboot pendente apos patch aplicado.">
+                  <SettingTitle help="O que fazer quando um patch Linux exige reinicializacao: 'manual' = aguarda acao do operador; 'notify' = registra a pendencia sem reiniciar (para uso futuro com alertas); 'maintenance-window' = reinicia automaticamente apos o grace period configurado abaixo.">
                     Politica de reboot
                   </SettingTitle>
                   <div className="segmented-actions">
@@ -562,7 +562,7 @@ export function SettingsPage() {
               <div className="form-grid">
                 <label>
                   <span className="field-label">
-                    Allowlist de pacotes <InfoHint text="Lista separada por virgula com padroes permitidos no apply real." />
+                    Allowlist de pacotes <InfoHint text="Padroes de nomes de pacotes que podem ser instalados em apply real (ex: 'openssl*, nginx*'). Deixe vazio para sem restricao. Use para limitar o apply a pacotes especificos e evitar surpresas." />
                   </span>
                   <input
                     className="input"
@@ -573,7 +573,7 @@ export function SettingsPage() {
                 </label>
                 <label>
                   <span className="field-label">
-                    Timeout de apply <InfoHint text="Tempo maximo, em segundos, para execucao do apply Linux." />
+                    Timeout de apply <InfoHint text="Tempo maximo, em segundos, que o agente aguarda o apt-get concluir a instalacao antes de marcar o job como falho. Atualizacoes grandes ou conexoes lentas podem precisar de valores maiores (ex: 900s = 15min)." />
                   </span>
                   <input
                     className="input"
@@ -585,7 +585,7 @@ export function SettingsPage() {
                 </label>
                 <label>
                   <span className="field-label">
-                    Grace de reboot Linux <InfoHint text="Tempo de tolerancia, em minutos, para reboot planejado." />
+                    Grace de reboot Linux <InfoHint text="Quando a politica e 'maintenance-window', o agente aguarda esse tempo (em minutos) antes de reiniciar o host Linux — dando margem para processos em andamento finalizarem." />
                   </span>
                   <input
                     className="input"
@@ -621,12 +621,12 @@ export function SettingsPage() {
           <section className="panel section settings-tile settings-tile-wide">
             <div className="section-header">
               <h3 className="section-title">Execucao Windows</h3>
-              <InfoHint text="Controla scan, download, install e reboot em hosts Windows." />
+              <InfoHint text="Controla se o agente Windows pode acionar o Windows Update e como lidar com reinicializacoes. Ambos os toggles precisam estar ligados para uma instalacao completa." />
             </div>
             <div className="content-grid">
               <div className="compact-setting-list">
                 <div className="setting-row">
-                  <SettingTitle help="Permite scan controlado via UsoClient StartScan.">StartScan</SettingTitle>
+                  <SettingTitle help="Autoriza o agente a acionar uma varredura do Windows Update no host (UsoClient StartScan). Sem isso, todos os jobs Windows falham imediatamente sem instalar nada.">StartScan</SettingTitle>
                   <button
                     className={settings?.execution.windows_scan_apply_enabled ? "btn btn-primary" : "btn"}
                     disabled={executionLoading}
@@ -649,7 +649,7 @@ export function SettingsPage() {
                   </button>
                 </div>
                 <div className="setting-row">
-                  <SettingTitle help="Permite StartDownload e StartInstall nos hosts Windows.">
+                  <SettingTitle help="Autoriza o agente a baixar e instalar as atualizacoes encontradas pelo scan (StartDownload + StartInstall). Exige StartScan ligado. Quando desligado, o job apenas escaneia — util para verificar o que seria instalado sem aplicar.">
                     Download e install
                   </SettingTitle>
                   <button
@@ -674,7 +674,7 @@ export function SettingsPage() {
                   </button>
                 </div>
                 <div className="setting-row">
-                  <SettingTitle help="Tratamento do reboot pendente apos execucao Windows.">
+                  <SettingTitle help="O que fazer quando um patch Windows exige reinicializacao: 'manual' = aguarda acao do operador; 'notify' = registra a pendencia sem reiniciar (para uso futuro com alertas); 'maintenance-window' = agenda o reboot automaticamente apos o grace period abaixo.">
                     Politica de reboot
                   </SettingTitle>
                   <div className="segmented-actions">
@@ -704,7 +704,7 @@ export function SettingsPage() {
               <div className="form-grid">
                 <label>
                   <span className="field-label">
-                    Timeout Windows <InfoHint text="Tempo maximo, em segundos, para comandos Windows." />
+                    Timeout Windows <InfoHint text="Tempo maximo, em segundos, que o agente aguarda cada etapa do Windows Update (scan, download, install). Redes lentas ou pacotes grandes podem precisar de valores maiores (ex: 300s = 5min por etapa)." />
                   </span>
                   <input
                     className="input"
@@ -716,7 +716,7 @@ export function SettingsPage() {
                 </label>
                 <label>
                   <span className="field-label">
-                    Grace de reboot Windows <InfoHint text="Tempo de tolerancia, em minutos, para reboot planejado." />
+                    Grace de reboot Windows <InfoHint text="Quando a politica e 'maintenance-window', o agente aguarda esse tempo (em minutos) antes de reiniciar o host Windows — dando margem para usuarios salvarem trabalho em andamento." />
                   </span>
                   <input
                     className="input"
@@ -741,7 +741,7 @@ export function SettingsPage() {
           <section className="panel section settings-tile settings-tile-wide">
             <div className="section-header">
               <h3 className="section-title">Comandos de instalacao</h3>
-              <InfoHint text="Comandos gerados com base na URL publica e token bootstrap configurados." />
+              <InfoHint text="Comandos prontos para instalar ou atualizar o agente em cada plataforma. Copie e execute no host de destino com privilegios de administrador. Apos instalar, aprove o agente em Maquinas > Pendentes." />
             </div>
             <div className="settings-command-grid">
               {[
