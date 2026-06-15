@@ -13,6 +13,9 @@
   --sidebar-width: 244px;
   --font-ui: "Syne", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
+  --success-bg: rgba(0, 229, 160, 0.12);
+  --success-text: #a8f0a8;
+  --muted-bg: rgba(122, 144, 168, 0.14);
 }
 
 * {
@@ -251,24 +254,40 @@ select {
   background: transparent;
   color: var(--text);
   cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
 }
 
-.btn-primary {
-  border-color: transparent;
-  background: linear-gradient(135deg, var(--accent), #4ee7ff);
-  color: #021015;
+.btn:hover:not(:disabled) {
+  border-color: rgba(0, 212, 255, 0.22);
+  background: rgba(0, 212, 255, 0.06);
 }
 
+.btn:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.btn-primary,
 .btn-primary-uniform {
   border-color: transparent;
   background: linear-gradient(135deg, var(--accent), #4ee7ff);
   color: #021015;
 }
 
+.btn-primary:hover:not(:disabled),
+.btn-primary-uniform:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1adcff, #72edff);
+}
+
 .btn-danger {
   border-color: rgba(255, 77, 106, 0.22);
   background: rgba(255, 77, 106, 0.14);
   color: #ffb0bd;
+}
+
+.btn-danger:hover:not(:disabled) {
+  border-color: rgba(255, 77, 106, 0.38);
+  background: rgba(255, 77, 106, 0.22);
 }
 
 .modal-extra {
@@ -615,6 +634,29 @@ select {
   border-color: rgba(255, 77, 106, 0.28);
   background: rgba(255, 77, 106, 0.1);
   color: #ffb0bd;
+}
+
+.stats-mini-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.form-error {
+  margin: 0;
+  color: #ff9fb0;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.text-strong {
+  font-weight: 700;
 }
 
 .page-action-footer {
@@ -989,6 +1031,11 @@ select {
   background: rgba(255, 77, 106, 0.12);
 }
 
+.tag.dim {
+  color: var(--muted);
+  background: var(--muted-bg);
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;
@@ -1021,6 +1068,19 @@ select {
   border-radius: 12px;
   background: var(--surface-2);
   color: var(--text);
+  transition: border-color 120ms ease;
+}
+
+.input:focus,
+.select:focus {
+  outline: none;
+  border-color: rgba(0, 212, 255, 0.4);
+}
+
+.input:disabled,
+.select:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .field-label {

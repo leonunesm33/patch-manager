@@ -262,16 +262,7 @@ export function SchedulesPage() {
                   <div style={{ opacity: schedule.is_active ? 1 : 0.6 }}>
                     <div style={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
                       {schedule.name}
-                      <span
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 600,
-                          padding: "2px 7px",
-                          borderRadius: 4,
-                          background: schedule.is_active ? "var(--color-success, #2d6a2d)" : "var(--color-muted-bg, #333)",
-                          color: schedule.is_active ? "#a8f0a8" : "var(--color-muted, #999)",
-                        }}
-                      >
+                      <span className={`tag ${schedule.is_active ? "ok" : "dim"}`}>
                         {schedule.is_active ? "Ativo" : "Inativo"}
                       </span>
                     </div>
@@ -406,26 +397,28 @@ export function SchedulesPage() {
                 <option value="monthly">mensal</option>
               </select>
             </label>
-            <label>
-              <span className="field-label">Data de instalacao</span>
-              <input
-                className="input"
-                type="date"
-                value={form.install_date ?? ""}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, install_date: event.target.value || null }))
-                }
-              />
-            </label>
-            <label>
-              <span className="field-label">Hora de instalacao</span>
-              <input
-                className="input"
-                type="time"
-                value={form.install_time}
-                onChange={(event) => setForm((current) => ({ ...current, install_time: event.target.value }))}
-              />
-            </label>
+            <div className="form-row">
+              <label>
+                <span className="field-label">Data de instalacao</span>
+                <input
+                  className="input"
+                  type="date"
+                  value={form.install_date ?? ""}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, install_date: event.target.value || null }))
+                  }
+                />
+              </label>
+              <label>
+                <span className="field-label">Hora de instalacao</span>
+                <input
+                  className="input"
+                  type="time"
+                  value={form.install_time}
+                  onChange={(event) => setForm((current) => ({ ...current, install_time: event.target.value }))}
+                />
+              </label>
+            </div>
             <label>
               <span className="field-label">Politica de reboot</span>
               <select
@@ -443,30 +436,32 @@ export function SchedulesPage() {
                 <option value="never">Nao reiniciar</option>
               </select>
             </label>
-            <label>
-              <span className="field-label">Data de reboot</span>
-              <input
-                className="input"
-                disabled={form.reboot_policy === "never"}
-                type="date"
-                value={form.reboot_date ?? ""}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, reboot_date: event.target.value || null }))
-                }
-              />
-            </label>
-            <label>
-              <span className="field-label">Hora de reboot</span>
-              <input
-                className="input"
-                disabled={form.reboot_policy === "never"}
-                type="time"
-                value={form.reboot_time ?? ""}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, reboot_time: event.target.value || null }))
-                }
-              />
-            </label>
+            <div className="form-row">
+              <label>
+                <span className="field-label">Data de reboot</span>
+                <input
+                  className="input"
+                  disabled={form.reboot_policy === "never"}
+                  type="date"
+                  value={form.reboot_date ?? ""}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, reboot_date: event.target.value || null }))
+                  }
+                />
+              </label>
+              <label>
+                <span className="field-label">Hora de reboot</span>
+                <input
+                  className="input"
+                  disabled={form.reboot_policy === "never"}
+                  type="time"
+                  value={form.reboot_time ?? ""}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, reboot_time: event.target.value || null }))
+                  }
+                />
+              </label>
+            </div>
             <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <input
                 type="checkbox"
@@ -476,9 +471,7 @@ export function SchedulesPage() {
               <span className="field-label" style={{ margin: 0 }}>Janela ativa</span>
             </label>
             {formError ? (
-              <p className="muted" style={{ margin: 0, color: "#ff9fb0" }}>
-                {formError}
-              </p>
+              <p className="form-error">{formError}</p>
             ) : null}
             <div style={{ display: "flex", gap: 10 }}>
               <button className="btn btn-primary btn-primary-uniform" type="submit" disabled={isSubmitting}>

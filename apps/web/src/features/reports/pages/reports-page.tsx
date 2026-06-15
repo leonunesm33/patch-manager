@@ -285,14 +285,7 @@ export function ReportsPage() {
             {error}. Verifique se a API esta ativa em `http://localhost:8000`.
           </p>
         ) : null}
-        <div
-          style={{
-            display: "grid",
-            gap: 12,
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            marginBottom: 18,
-          }}
-        >
+        <div className="stats-mini-grid" style={{ marginBottom: 18 }}>
           <div className="list-item">
             <div>
               <div className="eyebrow">Instalados</div>

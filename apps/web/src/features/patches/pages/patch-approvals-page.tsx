@@ -398,7 +398,7 @@ export function PatchApprovalsPage() {
           </div>
         </div>
         {showFilters ? (
-          <div className="list-item subtle-filter-panel" style={{ marginBottom: 16, alignItems: "stretch" }}>
+          <div className="subtle-filter-panel" style={{ marginBottom: 16 }}>
             <div style={{ display: "grid", gap: 12, width: "100%" }}>
               <div>
                 <div style={{ fontWeight: 700 }}>Filtros</div>
@@ -712,9 +712,7 @@ export function PatchApprovalsPage() {
                 />
               </label>
               {actionError ? (
-                <p className="muted" style={{ margin: 0, color: "#ff9fb0" }}>
-                  {actionError}
-                </p>
+                <p className="form-error">{actionError}</p>
               ) : null}
               <div style={{ display: "flex", gap: 10 }}>
                 <button className="btn btn-primary btn-primary-uniform" disabled={isSubmitting} type="submit">

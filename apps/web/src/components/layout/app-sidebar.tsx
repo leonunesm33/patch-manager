@@ -14,12 +14,15 @@ type NavItem = {
 const navigation: Array<{ label: string; items: NavItem[] }> = [
   {
     label: "Principal",
-    items: [{ to: "/", name: "Dashboard" }, { to: "/machines", name: "Maquinas" }],
+    items: [
+      { to: "/", name: "Dashboard" },
+      { to: "/machines", name: "Maquinas" },
+    ],
   },
   {
     label: "Patches",
     items: [
-      { to: "/patches", name: "Aprovacoes", badge: "7" },
+      { to: "/patches", name: "Aprovacoes" },
       { to: "/schedules", name: "Agendamentos" },
     ],
   },
@@ -28,6 +31,11 @@ const navigation: Array<{ label: string; items: NavItem[] }> = [
     items: [
       { to: "/operations", name: "Operacoes" },
       { to: "/reports", name: "Relatorios" },
+    ],
+  },
+  {
+    label: "Sistema",
+    items: [
       { to: "/settings", name: "Configuracoes" },
       { to: "/users", name: "Usuarios", adminOnly: true },
     ],

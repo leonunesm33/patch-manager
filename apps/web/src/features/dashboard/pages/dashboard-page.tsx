@@ -81,7 +81,7 @@ export function DashboardPage() {
           tone: "#ffb347",
         },
         {
-          label: "Cmds operacionais",
+          label: "Comandos pendentes",
           value: String(data.summary.pending_agent_commands),
           detail: "comandos administrativos aguardando retorno",
           tone: "#8f7cff",
@@ -223,7 +223,6 @@ export function DashboardPage() {
                   <div className="bar-stack">
                     <div className="bar-value">{dailyTotal}</div>
                     <div
-                      aria-label={linuxTooltip}
                       className="bar linux chart-hover-target"
                       data-tooltip={linuxTooltip}
                       role="img"
@@ -231,11 +230,10 @@ export function DashboardPage() {
                       title={linuxTooltip}
                     />
                     <div
-                      aria-label={windowsTooltip}
                       className="bar windows chart-hover-target"
                       data-tooltip={windowsTooltip}
                       role="img"
-                      style={{ height: `${entry.windows * 12}px` }}
+                      style={{ height: `${entry.windows * 14}px` }}
                       title={windowsTooltip}
                     />
                   </div>

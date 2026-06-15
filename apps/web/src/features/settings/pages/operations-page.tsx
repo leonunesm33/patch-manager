@@ -562,13 +562,7 @@ export function OperationsPage() {
             </button>
           </div>
         </div>
-        <div
-          style={{
-            display: "grid",
-            gap: 12,
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-          }}
-        >
+        <div className="stats-mini-grid">
           <div className="list-item">
             <div>
               <div className="eyebrow">Fila</div>

@@ -532,9 +532,7 @@ export function MachinesPage() {
                 </select>
               </label>
               {formError ? (
-                <p className="muted" style={{ margin: 0, color: "#ff9fb0" }}>
-                  {formError}
-                </p>
+                <p className="form-error">{formError}</p>
               ) : null}
               <div style={{ display: "flex", gap: 10 }}>
                 <button className="btn btn-primary btn-primary-uniform" type="submit" disabled={isSubmitting}>
