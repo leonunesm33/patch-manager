@@ -461,10 +461,10 @@ class PatchCycleService:
         snapshot = self.snapshot_repository.get_by_agent_id(agent_id)
         if snapshot is None:
             return False
-        return bool(
-            snapshot.reboot_required
-            or snapshot.post_patch_state in {"reboot-required", "reboot-scheduled", "reboot-failed"}
-        )
+        # Only consider reboots initiated by a Patch Manager patch cycle.
+        # snapshot.reboot_required reflects the OS-level /var/run/reboot-required and
+        # would trigger reboots on freshly enrolled hosts that already had that file.
+        return snapshot.post_patch_state in {"reboot-required", "reboot-scheduled", "reboot-failed"}
 
     def _scheduled_reboot_command_id(self, schedule_id: str, agent_id: str, period_key: str) -> str:
         digest = sha1(f"{schedule_id}:{agent_id}:{period_key}:reboot".encode("utf-8")).hexdigest()[:18]
