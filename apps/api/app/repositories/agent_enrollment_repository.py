@@ -62,10 +62,11 @@ class AgentEnrollmentRepository:
             enrollment.os_version = os_version
             enrollment.kernel_version = kernel_version
             enrollment.agent_version = agent_version
+            # "active" agents that re-enroll (e.g. after restart with empty env key)
+            # are restored to "approved" so they can retrieve their key without
+            # requiring manual re-approval each time.
             if enrollment.status == "active":
-                enrollment.status = "pending"
-                enrollment.issued_key = None
-                enrollment.approved_at = None
+                enrollment.status = "approved"
 
         self.session.add(enrollment)
         self.session.commit()
@@ -83,7 +84,8 @@ class AgentEnrollmentRepository:
 
     def mark_active(self, enrollment: AgentEnrollmentModel) -> AgentEnrollmentModel:
         enrollment.status = "active"
-        enrollment.issued_key = None
+        # issued_key is intentionally kept so agents can re-enroll automatically
+        # after a restart without requiring manual re-approval.
         self.session.add(enrollment)
         self.session.commit()
         self.session.refresh(enrollment)
