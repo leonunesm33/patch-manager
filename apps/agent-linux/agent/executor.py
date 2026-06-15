@@ -200,7 +200,7 @@ def execute_patch_job_with_mode(
 
         upgradable_packages = _list_upgradable_packages()
         if package_name not in upgradable_packages:
-            return "failed", f"Package {package_name} is not currently upgradable on this host.", False
+            return "applied", f"Package {package_name} is already at the latest available version on this host.", False
 
         if allow_security_only and not _has_security_candidate(package_name):
             return "failed", f"Package {package_name} does not have a security-tagged upgrade candidate.", False

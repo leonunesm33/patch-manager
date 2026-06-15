@@ -92,6 +92,24 @@ class PatchJobRepository:
         )
         return bool(self.session.scalar(statement))
 
+    def count_failed_jobs_since(
+        self,
+        schedule_id: str,
+        machine_id: str,
+        patch_id: str,
+        since: "datetime",
+    ) -> int:
+        statement: Select[tuple[int]] = select(func.count(PatchJobModel.id)).where(
+            and_(
+                PatchJobModel.schedule_id == schedule_id,
+                PatchJobModel.machine_id == machine_id,
+                PatchJobModel.patch_id == patch_id,
+                PatchJobModel.status == "failed",
+                PatchJobModel.created_at >= since,
+            )
+        )
+        return self.session.scalar(statement) or 0
+
     def exists_active_or_completed_job_since(
         self,
         schedule_id: str,

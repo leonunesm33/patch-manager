@@ -71,11 +71,15 @@ class PatchCycleService:
             for schedule in related_schedules:
                 for machine in self._select_job_machines(schedule, patch, machines):
                     # Block duplicates only for non-failed jobs created today.
-                    # Failed jobs can be retried within the same window.
+                    # Failed jobs can be retried, but only up to MAX_RETRIES_PER_WINDOW times.
                     window_start = datetime.combine(now.date(), time.min, tzinfo=now.tzinfo).astimezone(UTC)
                     if self.patch_job_repository.exists_active_or_completed_job_since(
                         schedule.id, machine.id, patch.id, window_start
                     ):
+                        continue
+                    if self.patch_job_repository.count_failed_jobs_since(
+                        schedule.id, machine.id, patch.id, window_start
+                    ) >= self.MAX_RETRIES_PER_WINDOW:
                         continue
                     enqueued_jobs.append(
                         PatchJobModel(
@@ -386,6 +390,8 @@ class PatchCycleService:
     # o scheduler para de gerar novos comandos para aquela janela, evitando
     # que agentes recém-instalados recebam comandos de reboot de janelas já expiradas.
     WINDOW_MAX_AGE_SECONDS: int = 3600  # 60 minutos
+    # Número máximo de tentativas por job dentro do mesmo dia antes de parar de retentar.
+    MAX_RETRIES_PER_WINDOW: int = 3
 
     def _is_schedule_window_due(
         self,
