@@ -47,38 +47,44 @@ _APT_PRIORITY_TO_SEVERITY: dict[str, str] = {
 
 
 def _get_package_info_via_python_apt() -> dict[str, dict[str, str]] | None:
-    """Use python3-apt (same library as PackageKit/Cockpit) to get category and severity.
+    """Use apt_pkg (same C library as PackageKit/Cockpit) to get category and severity.
 
-    Returns {pkg_name: {category, severity}} for all upgradable packages, where category
-    and severity follow the Cockpit/PackageKit standard:
-      category: security | bugfix | enhancement | unknown
-      severity: critical | important | moderate | low | unknown
+    Returns {pkg_name: {category, severity, current_version, target_version, is_new_install}}
+    for ALL packages involved in a dist-upgrade — matches Cockpit's total package count.
 
-    Security classification mirrors Cockpit behavior: a package is "security" only when
-    its candidate version is exclusively in the security pocket — i.e. NOT also present
-    in jammy-updates (packages promoted to updates are categorized as "bugfix").
+    Security classification uses apt_pkg's file_list for each candidate version, which
+    enumerates ALL repository origins exactly as PackageKit does. A package is "security"
+    if its candidate version's file_list contains a security-tagged archive.
+
     Returns None if python3-apt is unavailable.
     """
     script = (
-        "import apt, json\n"
-        "def cat(pkg):\n"
-        "    archives = [(o.archive or '').lower() for o in pkg.candidate.origins]\n"
-        "    has_sec = any('security' in a for a in archives)\n"
-        "    has_upd = any('updates' in a for a in archives)\n"
-        "    if has_sec and not has_upd: return 'security'\n"
-        "    if has_upd: return 'bugfix'\n"
-        "    if any('backports' in a or 'proposed' in a for a in archives): return 'enhancement'\n"
-        "    return 'normal'\n"
-        "def sev(pkg):\n"
-        "    p = (pkg.candidate.priority or '').lower()\n"
-        "    return {'required':'critical','important':'important','standard':'moderate',"
-        "            'optional':'low','extra':'low'}.get(p, 'unknown')\n"
-        "cache = apt.Cache()\n"
-        "r = {n: {'category': cat(cache[n]), 'severity': sev(cache[n])}\n"
-        "     for n in cache.keys() if cache[n].is_upgradable and cache[n].candidate}\n"
+        "import apt_pkg, json\n"
+        "apt_pkg.init_config()\n"
+        "apt_pkg.init_system()\n"
+        "cache = apt_pkg.Cache()\n"
+        "dep_cache = apt_pkg.DepCache(cache)\n"
+        "dep_cache.upgrade(True)\n"
+        "SEV = {'required':'critical','important':'important','standard':'moderate',\n"
+        "       'optional':'low','extra':'low'}\n"
+        "r = {}\n"
+        "for pkg in cache.packages:\n"
+        "    if not (dep_cache.marked_upgrade(pkg) or dep_cache.marked_install(pkg)): continue\n"
+        "    cand = dep_cache.get_candidate_ver(pkg)\n"
+        "    if not cand: continue\n"
+        "    is_sec = is_upd = is_bp = False\n"
+        "    for f, idx in cand.file_list:\n"
+        "        a = (f.archive or '').lower()\n"
+        "        if 'security' in a: is_sec = True\n"
+        "        elif 'updates' in a: is_upd = True\n"
+        "        elif 'backports' in a or 'proposed' in a: is_bp = True\n"
+        "    cat = 'security' if is_sec else ('bugfix' if is_upd else ('enhancement' if is_bp else 'normal'))\n"
+        "    cur = pkg.current_ver.ver_str if pkg.current_ver else None\n"
+        "    r[pkg.name] = {'category':cat, 'severity':SEV.get((cand.priority_str or '').lower(),'unknown'),\n"
+        "                   'current_version':cur, 'target_version':cand.ver_str, 'is_new_install':cur is None}\n"
         "print(json.dumps(r))\n"
     )
-    output = _run(["python3", "-c", script], timeout=60)
+    output = _run(["python3", "-c", script], timeout=90)
     if not output:
         return None
     try:
@@ -109,10 +115,45 @@ def _infer_category_from_source(source: str) -> str:
 
 
 def _collect_apt_upgradable_details(limit: int = 500) -> list[dict[str, object]]:
-    upgradable_output = _run(["apt", "list", "--upgradable"], timeout=30)
+    # Prefer python3-apt (dist-upgrade aware, correct security detection)
+    pkg_info = _get_package_info_via_python_apt()
 
-    # First pass: parse raw items so we have target versions before info lookup
-    raw_items: list[dict[str, object]] = []
+    if pkg_info is not None:
+        details: list[dict[str, object]] = []
+        for name, info in pkg_info.items():
+            category = info.get("category", "unknown")
+            severity = info.get("severity", "unknown")
+            current_version = info.get("current_version")
+            target_version = info.get("target_version")
+            is_new = info.get("is_new_install", False)
+            source = "new-install" if is_new else "upgrade"
+            summary = (
+                f"{name} {current_version} -> {target_version}"
+                if current_version
+                else f"{name} {target_version} (new)"
+            )
+            details.append(
+                {
+                    "identifier": name,
+                    "title": name,
+                    "current_version": current_version,
+                    "target_version": target_version,
+                    "source": source,
+                    "summary": summary,
+                    "kb_id": None,
+                    "security_only": category == "security",
+                    "category": category,
+                    "severity": severity,
+                    "installed_at": None,
+                }
+            )
+            if len(details) >= limit:
+                break
+        return details
+
+    # Fallback: apt list --upgradable (no dist-upgrade new packages, basic security detection)
+    upgradable_output = _run(["apt", "list", "--upgradable"], timeout=30)
+    details = []
     for raw_line in upgradable_output.splitlines()[1:]:
         line = raw_line.strip()
         if not line:
@@ -131,46 +172,21 @@ def _collect_apt_upgradable_details(limit: int = 500) -> list[dict[str, object]]
             target_version = parts[1] if len(parts) > 1 else None
             current_match = re.search(r"\[upgradable from:\s*([^\]]+)\]", line)
             current_version = current_match.group(1) if current_match else None
-        raw_items.append({
-            "identifier": identifier,
-            "source": source,
-            "target_version": target_version,
-            "current_version": current_version,
-            "line": line,
-        })
 
-    # Get package info via python3-apt (PackageKit/Cockpit standard)
-    pkg_info = _get_package_info_via_python_apt()
-
-    details: list[dict[str, object]] = []
-    for item in raw_items:
-        identifier = str(item["identifier"])
-        source = str(item["source"])
-
-        if pkg_info is not None:
-            info = pkg_info.get(identifier, {})
-            category = info.get("category", "unknown")
-            severity = info.get("severity", "unknown")
-            is_security = category == "security"
-        else:
-            # Fallback: infer from the source/archive string in apt list output.
-            # Uses the same "security-only" rule as Cockpit (no python3-apt needed).
-            category = _infer_category_from_source(source)
-            is_security = category == "security"
-            severity = "important" if is_security else "low"
-
+        category = _infer_category_from_source(source)
+        is_security = category == "security"
         details.append(
             {
                 "identifier": identifier,
                 "title": identifier,
-                "current_version": item["current_version"],
-                "target_version": item["target_version"],
+                "current_version": current_version,
+                "target_version": target_version,
                 "source": source,
-                "summary": item["line"],
+                "summary": line,
                 "kb_id": None,
                 "security_only": is_security,
                 "category": category,
-                "severity": severity,
+                "severity": "important" if is_security else "low",
                 "installed_at": None,
             }
         )
