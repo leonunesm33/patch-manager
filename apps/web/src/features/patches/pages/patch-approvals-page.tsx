@@ -8,11 +8,13 @@ import {
   rejectPatch,
   updatePatch,
 } from "@/features/patches/api";
+import { fetchReports } from "@/features/reports/api";
 import { ActionMenu } from "@/components/common/action-menu";
 import { ConfirmModal } from "@/components/common/confirm-modal";
 import { StatusBadge } from "@/components/common/status-badge";
 import { formatDateTimeSaoPaulo } from "@/lib/datetime";
 import type { PatchApproval, PatchCategory, PatchCreate, PatchSeverity } from "@/features/patches/types";
+import type { ReportItem } from "@/features/reports/types";
 
 function getStatusVariant(status: PatchApproval["approval_status"]) {
   if (status === "approved") return "ok";
@@ -65,6 +67,7 @@ export function PatchApprovalsPage() {
   const categoryFilter = searchParams.get("category") ?? "";
   const platformFilter = searchParams.get("platform") ?? "";
   const [patches, setPatches] = useState<PatchApproval[]>([]);
+  const [executions, setExecutions] = useState<ReportItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -118,6 +121,14 @@ export function PatchApprovalsPage() {
     void loadPatches();
   }, [machineIdFilter]);
 
+  useEffect(() => {
+    let active = true;
+    fetchReports()
+      .then((data) => { if (active) setExecutions(data); })
+      .catch(() => { /* executions são complementares, falha silenciosa */ });
+    return () => { active = false; };
+  }, []);
+
   function clearFilters() {
     setSearchParams({});
   }
@@ -157,6 +168,7 @@ export function PatchApprovalsPage() {
   const filteredPatches = patches.filter(patchMatchesFilters);
   const pendingPatches = filteredPatches.filter((patch) => patch.approval_status === "pending");
   const managedPatches = filteredPatches.filter((patch) => patch.approval_status !== "pending");
+  const installedExecutions = executions.filter((e) => e.result === "applied");
   const categoryOptions = uniqueValues(patches.map((patch) => patch.category));
   const severityOptions = uniqueValues(patches.map((patch) => patch.severity));
   const platformOptions = uniqueValues(
@@ -502,6 +514,52 @@ export function PatchApprovalsPage() {
           </span>
         </div>
         {renderPatchTable(managedPatches, "Nenhum patch aprovado ou rejeitado para o filtro atual.")}
+      </section>
+
+      <section className="panel section">
+        <div className="section-header">
+          <h2 className="section-title">Patches instalados</h2>
+          <span className="muted">
+            {`${installedExecutions.length} instalacoes registradas`}
+          </span>
+        </div>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Patch</th>
+              <th>Maquina</th>
+              <th>Plataforma</th>
+              <th>Criticidade</th>
+              <th>Janela</th>
+              <th>Duracao</th>
+            </tr>
+          </thead>
+          <tbody>
+            {installedExecutions.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="muted">
+                  Nenhum patch instalado registrado. Execute um agendamento com patches aprovados para ver os resultados aqui.
+                </td>
+              </tr>
+            ) : null}
+            {installedExecutions.map((exec, idx) => (
+              <tr key={`${exec.date}-${exec.machine}-${exec.patch}-${idx}`}>
+                <td className="code">{exec.date}</td>
+                <td className="code">{exec.patch}</td>
+                <td>{exec.machine}</td>
+                <td>{exec.platform}</td>
+                <td>
+                  <StatusBadge variant={getSeverityVariant(exec.severity)}>
+                    {getSeverityLabel(exec.severity)}
+                  </StatusBadge>
+                </td>
+                <td>{exec.schedule}</td>
+                <td className="code">{exec.duration}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </section>
 
       {showPatchForm || editingId ? (

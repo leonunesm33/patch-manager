@@ -291,18 +291,18 @@ export function ReportsPage() {
         >
           <div className="list-item">
             <div>
+              <div className="eyebrow">Instalados</div>
+              <div style={{ fontSize: 28, fontWeight: 800 }}>{successfulExecutions.length}</div>
+              <div className="muted">patches aplicados com sucesso</div>
+            </div>
+          </div>
+          <div className="list-item">
+            <div>
               <div className="eyebrow">Jobs</div>
               <div style={{ fontSize: 28, fontWeight: 800 }}>{jobs.length}</div>
               <div className="muted">
                 {pendingJobs.length} pendentes, {runningJobs.length} em andamento
               </div>
-            </div>
-          </div>
-          <div className="list-item">
-            <div>
-              <div className="eyebrow">Execucoes</div>
-              <div style={{ fontSize: 28, fontWeight: 800 }}>{rows.length}</div>
-              <div className="muted">{successfulExecutions.length} com sucesso</div>
             </div>
           </div>
           <div className="list-item">
@@ -340,6 +340,48 @@ export function ReportsPage() {
             </StatusBadge>
           </div>
         ) : null}
+      </section>
+
+      <section className="panel section">
+        <div className="section-header" style={{ marginTop: 8 }}>
+          <h3 className="section-title">Patches instalados</h3>
+          <span className="muted">
+            {loading ? "Carregando..." : `${successfulExecutions.length} instalacoes registradas`}
+          </span>
+        </div>
+        <table className="table" style={{ marginBottom: 22 }}>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Patch</th>
+              <th>Maquina</th>
+              <th>Plataforma</th>
+              <th>Criticidade</th>
+              <th>Janela</th>
+              <th>Duracao</th>
+            </tr>
+          </thead>
+          <tbody>
+            {!loading && successfulExecutions.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="muted">
+                  Nenhum patch instalado registrado ainda.
+                </td>
+              </tr>
+            ) : null}
+            {successfulExecutions.map((row, idx) => (
+              <tr key={`${row.date}-${row.machine}-${row.patch}-${idx}`}>
+                <td className="code">{row.date}</td>
+                <td className="code">{row.patch}</td>
+                <td>{row.machine}</td>
+                <td>{row.platform}</td>
+                <td>{row.severity}</td>
+                <td>{row.schedule}</td>
+                <td className="code">{row.duration}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </section>
 
       <section className="panel section">
@@ -403,8 +445,8 @@ export function ReportsPage() {
 
       <section className="panel section">
         <div className="section-header">
-          <h3 className="section-title">Historico de execucao</h3>
-          <span className="muted">{loading ? "Carregando..." : `${rows.length} eventos`}</span>
+          <h3 className="section-title">Historico completo de execucao</h3>
+          <span className="muted">{loading ? "Carregando..." : `${rows.length} eventos (instalados e falhas)`}</span>
         </div>
         <table className="table">
           <thead>
@@ -427,15 +469,19 @@ export function ReportsPage() {
                 </td>
               </tr>
             ) : null}
-            {rows.map((row) => (
-              <tr key={`${row.date}-${row.machine}-${row.patch}`}>
+            {rows.map((row, idx) => (
+              <tr key={`${row.date}-${row.machine}-${row.patch}-${idx}`}>
                 <td className="code">{row.date}</td>
                 <td>{row.schedule}</td>
                 <td>{row.machine}</td>
                 <td className="code">{row.patch}</td>
                 <td>{row.platform}</td>
                 <td>{row.severity}</td>
-                <td>{row.result}</td>
+                <td>
+                  <StatusBadge variant={row.result === "applied" || row.result === "completed" ? "ok" : "error"}>
+                    {row.result}
+                  </StatusBadge>
+                </td>
                 <td className="code">{row.duration}</td>
               </tr>
             ))}
