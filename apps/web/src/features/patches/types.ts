@@ -1,5 +1,5 @@
 export type PatchSeverity = "low" | "medium" | "moderate" | "high" | "critical" | "important" | "optional" | "unknown";
-export type PatchCategory = "security" | "bugfix" | "enhancement" | "driver" | "firmware" | "feature" | "stability" | "other" | "unknown";
+export type PatchCategory = "security" | "bugfix" | "enhancement" | "driver" | "firmware" | "feature" | "stability" | "other" | "unknown" | "normal";
 
 export type PatchAffectedMachine = {
   id: string;

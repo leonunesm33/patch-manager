@@ -52,6 +52,7 @@ function getCategoryLabel(category: string) {
     stability: "estabilidade",
     other: "outros",
     unknown: "geral",
+    normal: "normal",
   };
   return labels[category] ?? category;
 }

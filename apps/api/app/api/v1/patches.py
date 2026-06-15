@@ -15,30 +15,7 @@ from app.schemas.patch import PatchAffectedMachine, PatchApproval, PatchCreate
 
 router = APIRouter()
 
-MOCK_PATCHES = [
-    PatchApproval(
-        id="KB5034441",
-        display_name="KB5034441",
-        target="Windows Servers",
-        severity="critical",
-        category="security",
-        machines=8,
-        affected_machines=[],
-        release_date="2026-04-08",
-        approval_status="pending",
-    ),
-    PatchApproval(
-        id="openssl-3.0.2-0ubuntu1.14",
-        display_name="openssl 3.0.2-0ubuntu1.14",
-        target="Ubuntu Production",
-        severity="high",
-        category="security",
-        machines=5,
-        affected_machines=[],
-        release_date="2026-04-09",
-        approval_status="pending",
-    ),
-]
+MOCK_PATCHES: list[PatchApproval] = []
 
 
 def _machine_matches_patch_target(machine: MachineModel, target: str) -> bool:

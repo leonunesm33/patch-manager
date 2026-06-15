@@ -68,7 +68,7 @@ def _get_package_info_via_python_apt() -> dict[str, dict[str, str]] | None:
         "    if has_sec and not has_upd: return 'security'\n"
         "    if has_upd: return 'bugfix'\n"
         "    if any('backports' in a or 'proposed' in a for a in archives): return 'enhancement'\n"
-        "    return 'unknown'\n"
+        "    return 'normal'\n"
         "def sev(pkg):\n"
         "    p = (pkg.candidate.priority or '').lower()\n"
         "    return {'required':'critical','important':'important','standard':'moderate',"
@@ -93,6 +93,8 @@ def _infer_category_from_source(source: str) -> str:
     Mirrors Cockpit's security rule: a package is 'security' only when the source field
     contains 'security' AND does NOT also contain 'updates' (packages promoted to the
     updates pocket are categorized as 'bugfix', not 'security').
+    Third-party PPA packages (archive 'jammy' without a pocket qualifier) are 'normal',
+    matching the PackageKit/Cockpit label for such packages.
     """
     s = source.lower()
     has_security = "security" in s
@@ -103,7 +105,7 @@ def _infer_category_from_source(source: str) -> str:
         return "bugfix"
     if "backports" in s or "proposed" in s:
         return "enhancement"
-    return "unknown"
+    return "normal"
 
 
 def _collect_apt_upgradable_details(limit: int = 500) -> list[dict[str, object]]:
