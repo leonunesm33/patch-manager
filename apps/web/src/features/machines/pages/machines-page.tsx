@@ -113,8 +113,20 @@ export function MachinesPage() {
 
     void loadMachines();
 
+    const intervalId = setInterval(() => {
+      if (!active) return;
+      Promise.all([fetchMachines(), fetchMachineGroups()])
+        .then(([machineResponse, groupResponse]) => {
+          if (!active) return;
+          setMachines(machineResponse);
+          setGroups(groupResponse);
+        })
+        .catch(() => { /* falha silenciosa no polling */ });
+    }, 30000);
+
     return () => {
       active = false;
+      clearInterval(intervalId);
     };
   }, []);
 
@@ -553,6 +565,9 @@ export function MachinesPage() {
             <span className="muted">
               {loading ? "Carregando da API..." : `${filteredMachines.length} de ${machines.length} maquinas`}
             </span>
+            <button className="btn" onClick={() => void loadMachines()} type="button">
+              Atualizar
+            </button>
             <button className="btn" onClick={() => setShowFilters((current) => !current)} type="button">
               {showFilters ? "Ocultar filtros" : activeFilterCount > 0 ? `Filtros (${activeFilterCount})` : "Filtros"}
             </button>
@@ -679,26 +694,17 @@ export function MachinesPage() {
                 </td>
                 <td>
                   {machine.post_patch_state ? (
-                    <div style={{ display: "grid", gap: 6 }}>
+                    <span
+                      title={[
+                        machine.post_patch_message,
+                        machine.reboot_scheduled_at ? `reboot em ${formatDateTimeSaoPaulo(machine.reboot_scheduled_at)}` : null,
+                        machine.last_apply_at ? `apply em ${formatDateTimeSaoPaulo(machine.last_apply_at)}` : null,
+                      ].filter(Boolean).join(" | ") || undefined}
+                    >
                       <StatusBadge variant={getPostPatchVariant(machine.post_patch_state)}>
                         {machine.post_patch_state}
                       </StatusBadge>
-                      {machine.post_patch_message ? (
-                        <div className="muted" style={{ maxWidth: 220 }}>
-                          {machine.post_patch_message}
-                        </div>
-                      ) : null}
-                      {machine.reboot_scheduled_at ? (
-                        <div className="muted">
-                          reboot em {formatDateTimeSaoPaulo(machine.reboot_scheduled_at)}
-                        </div>
-                      ) : null}
-                      {machine.last_apply_at ? (
-                        <div className="muted">
-                          ultimo apply em {formatDateTimeSaoPaulo(machine.last_apply_at)}
-                        </div>
-                      ) : null}
-                    </div>
+                    </span>
                   ) : (
                     <span className="muted">sem estado</span>
                   )}

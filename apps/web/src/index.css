@@ -550,6 +550,24 @@ select {
   transform: translate(-50%, 0);
 }
 
+.info-hint-popover-fixed {
+  position: fixed;
+  transform: translate(-50%, -100%);
+  z-index: 9999;
+  width: 260px;
+  max-width: min(260px, 70vw);
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 212, 255, 0.24);
+  border-radius: 12px;
+  background: rgba(7, 10, 16, 0.98);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.34);
+  color: #dce8f7;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.45;
+  pointer-events: none;
+}
+
 .settings-command-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

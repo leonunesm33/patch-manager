@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ConfirmModal } from "@/components/common/confirm-modal";
 import { StatusBadge } from "@/components/common/status-badge";
 import { formatDateTimeSaoPaulo } from "@/lib/datetime";
@@ -17,12 +18,40 @@ import type {
 } from "@/features/settings/types";
 
 function InfoHint({ text }: { text: string }) {
+  const [visible, setVisible] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  function show() {
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setPos({ top: rect.top - 10, left: rect.left + rect.width / 2 });
+    }
+    setVisible(true);
+  }
+
   return (
     <span className="info-hint">
-      <button aria-label={text} className="info-hint-button" type="button">
+      <button
+        ref={btnRef}
+        aria-label={text}
+        className="info-hint-button"
+        onMouseEnter={show}
+        onMouseLeave={() => setVisible(false)}
+        onFocus={show}
+        onBlur={() => setVisible(false)}
+        type="button"
+      >
         ?
       </button>
-      <span className="info-hint-popover">{text}</span>
+      {visible
+        ? createPortal(
+            <span className="info-hint-popover-fixed" style={{ top: pos.top, left: pos.left }}>
+              {text}
+            </span>,
+            document.body,
+          )
+        : null}
     </span>
   );
 }

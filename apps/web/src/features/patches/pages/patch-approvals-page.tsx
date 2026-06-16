@@ -67,6 +67,7 @@ export function PatchApprovalsPage() {
   const severityFilter = searchParams.get("severity") ?? "";
   const categoryFilter = searchParams.get("category") ?? "";
   const platformFilter = searchParams.get("platform") ?? "";
+  const machineNameFilter = searchParams.get("machine_name") ?? "";
   const [patches, setPatches] = useState<PatchApproval[]>([]);
   const [executions, setExecutions] = useState<ReportItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -158,7 +159,19 @@ export function PatchApprovalsPage() {
       (!approvalStatusFilter || patch.approval_status === approvalStatusFilter) &&
       (!severityFilter || patch.severity === severityFilter) &&
       (!categoryFilter || patch.category === categoryFilter) &&
-      patchMatchesPlatform(patch, platformFilter)
+      patchMatchesPlatform(patch, platformFilter) &&
+      (!machineNameFilter ||
+        patch.affected_machines.some((m) =>
+          m.name.toLowerCase().includes(machineNameFilter.toLowerCase()),
+        ))
+    );
+  }
+
+  function executionMatchesFilters(exec: ReportItem) {
+    return (
+      (!severityFilter || exec.severity === severityFilter) &&
+      (!platformFilter || exec.platform.toLowerCase().includes(platformFilter.toLowerCase())) &&
+      (!machineNameFilter || exec.machine.toLowerCase().includes(machineNameFilter.toLowerCase()))
     );
   }
 
@@ -168,10 +181,8 @@ export function PatchApprovalsPage() {
 
   const filteredPatches = patches.filter(patchMatchesFilters);
   const pendingPatches = filteredPatches.filter((patch) => patch.approval_status === "pending");
-  const managedPatches = filteredPatches.filter((patch) => patch.approval_status !== "pending");
-  const installedExecutions = executions.filter((e) => e.result === "applied");
+  const installedExecutions = executions.filter((e) => e.result === "applied" && executionMatchesFilters(e));
   const pendingPagination = usePagination(pendingPatches);
-  const managedPagination = usePagination(managedPatches);
   const installedPagination = usePagination(installedExecutions);
   const categoryOptions = uniqueValues(patches.map((patch) => patch.category));
   const severityOptions = uniqueValues(patches.map((patch) => patch.severity));
@@ -183,7 +194,7 @@ export function PatchApprovalsPage() {
     ]),
   );
   const hasActiveFilters = Boolean(
-    machineIdFilter || approvalStatusFilter || severityFilter || categoryFilter || platformFilter,
+    machineIdFilter || approvalStatusFilter || severityFilter || categoryFilter || platformFilter || machineNameFilter,
   );
 
   async function handlePatchDecision(
@@ -473,6 +484,15 @@ export function PatchApprovalsPage() {
                     ))}
                   </select>
                 </label>
+                <label>
+                  <span className="field-label">Nome da maquina</span>
+                  <input
+                    className="input"
+                    placeholder="Filtrar por hostname"
+                    value={machineNameFilter}
+                    onChange={(event) => updateFilter("machine_name", event.target.value)}
+                  />
+                </label>
               </div>
             </div>
             <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
@@ -515,24 +535,6 @@ export function PatchApprovalsPage() {
           to={pendingPagination.to}
           total={pendingPagination.total}
           onPageChange={pendingPagination.setPage}
-        />
-      </section>
-
-      <section className="panel section">
-        <div className="section-header">
-          <h2 className="section-title">Patches ja gerenciados</h2>
-          <span className="muted">
-            {loading ? "Carregando da API..." : `${managedPatches.length} aprovados ou rejeitados`}
-          </span>
-        </div>
-        {renderPatchTable(managedPagination.pageItems, "Nenhum patch aprovado ou rejeitado para o filtro atual.")}
-        <Pagination
-          page={managedPagination.page}
-          totalPages={managedPagination.totalPages}
-          from={managedPagination.from}
-          to={managedPagination.to}
-          total={managedPagination.total}
-          onPageChange={managedPagination.setPage}
         />
       </section>
 
