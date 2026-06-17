@@ -139,6 +139,11 @@ class PatchCycleService:
                 agent_id = self._agent_id_from_machine(machine)
                 if agent_id is None:
                     continue
+                if not self._machine_has_completed_pm_cycle(agent_id):
+                    # Máquina recém-enrollada (post_patch_state="idle"): nunca foi gerenciada
+                    # pelo PM. Não envia reboot mesmo com policy "always" para evitar reboots
+                    # inesperados logo após instalação do agente.
+                    continue
                 if reboot_policy == "if-needed" and not self._machine_needs_reboot(agent_id):
                     continue
 
@@ -456,6 +461,14 @@ class PatchCycleService:
         if not machine.id.startswith("agent-"):
             return None
         return machine.id.removeprefix("agent-")
+
+    def _machine_has_completed_pm_cycle(self, agent_id: str) -> bool:
+        """Retorna True apenas se a máquina passou por pelo menos um ciclo de patching do PM.
+        Estado 'idle' indica máquina recém-enrollada que ainda não foi gerenciada pelo PM."""
+        snapshot = self.snapshot_repository.get_by_agent_id(agent_id)
+        if snapshot is None:
+            return False
+        return snapshot.post_patch_state not in {None, "idle"}
 
     def _machine_needs_reboot(self, agent_id: str) -> bool:
         snapshot = self.snapshot_repository.get_by_agent_id(agent_id)

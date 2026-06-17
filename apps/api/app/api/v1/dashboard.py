@@ -42,6 +42,25 @@ def get_dashboard(
     patches = patch_repository.list_all()
     logs = execution_log_repository.list_recent(limit=20)
 
+    machine_platform_by_id: dict[str, str] = {
+        m.id.lower(): m.platform.lower() for m in machines
+    }
+
+    def _patch_platform(target: str) -> str:
+        t = target.lower()
+        if t.startswith("machine:"):
+            mid = t.removeprefix("machine:")
+            plat = machine_platform_by_id.get(mid, "")
+            if plat:
+                return plat
+        if "windows" in t:
+            return "windows"
+        if "ubuntu" in t or "linux" in t or "debian" in t or "rhel" in t:
+            return "linux"
+        return "unknown"
+
+    _LINUX_PLATFORMS = {"ubuntu", "linux", "debian", "rhel"}
+
     monitored_machines = len(machines)
     pending_patches = sum(machine.pending_patches for machine in machines)
     total_logs = len(logs)
@@ -112,60 +131,18 @@ def get_dashboard(
         patch_volume=[
             PatchVolumeItem(
                 label="Aprovados",
-                windows=len(
-                    [
-                        patch
-                        for patch in patches
-                        if patch.approval_status == "approved"
-                        and "windows" in patch.target.lower()
-                    ]
-                ),
-                linux=len(
-                    [
-                        patch
-                        for patch in patches
-                        if patch.approval_status == "approved"
-                        and "ubuntu" in patch.target.lower()
-                    ]
-                ),
+                windows=len([p for p in patches if p.approval_status == "approved" and _patch_platform(p.target) == "windows"]),
+                linux=len([p for p in patches if p.approval_status == "approved" and _patch_platform(p.target) in _LINUX_PLATFORMS]),
             ),
             PatchVolumeItem(
                 label="Pendentes",
-                windows=len(
-                    [
-                        patch
-                        for patch in patches
-                        if patch.approval_status == "pending"
-                        and "windows" in patch.target.lower()
-                    ]
-                ),
-                linux=len(
-                    [
-                        patch
-                        for patch in patches
-                        if patch.approval_status == "pending"
-                        and "ubuntu" in patch.target.lower()
-                    ]
-                ),
+                windows=len([p for p in patches if p.approval_status == "pending" and _patch_platform(p.target) == "windows"]),
+                linux=len([p for p in patches if p.approval_status == "pending" and _patch_platform(p.target) in _LINUX_PLATFORMS]),
             ),
             PatchVolumeItem(
                 label="Rejeitados",
-                windows=len(
-                    [
-                        patch
-                        for patch in patches
-                        if patch.approval_status == "rejected"
-                        and "windows" in patch.target.lower()
-                    ]
-                ),
-                linux=len(
-                    [
-                        patch
-                        for patch in patches
-                        if patch.approval_status == "rejected"
-                        and "ubuntu" in patch.target.lower()
-                    ]
-                ),
+                windows=len([p for p in patches if p.approval_status == "rejected" and _patch_platform(p.target) == "windows"]),
+                linux=len([p for p in patches if p.approval_status == "rejected" and _patch_platform(p.target) in _LINUX_PLATFORMS]),
             ),
         ],
         platform_distribution=PlatformDistribution(
