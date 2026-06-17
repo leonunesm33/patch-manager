@@ -682,7 +682,7 @@ export function MachinesPage() {
                     <button
                       className="btn"
                       onClick={() =>
-                        navigate(`/patches?machine_id=${encodeURIComponent(machine.id)}&approval_status=pending`)
+                        navigate(`/patches?machine_id=${encodeURIComponent(machine.id)}&approval_status=pending&machine_name=${encodeURIComponent(machine.name)}`)
                       }
                       type="button"
                     >

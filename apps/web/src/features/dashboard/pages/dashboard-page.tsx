@@ -109,6 +109,15 @@ export function DashboardPage() {
     (total, entry) => total + entry.linux,
     0,
   );
+  const CHART_MAX_PX = 100;
+  const patchVolumeMaxValue = Math.max(
+    1,
+    ...(data?.patch_volume ?? []).flatMap((e) => [e.linux, e.windows]),
+  );
+  function barPx(value: number): number {
+    if (value === 0) return 0;
+    return Math.max(3, Math.round((value / patchVolumeMaxValue) * CHART_MAX_PX));
+  }
   const totalDistributionDevices =
     windowsServerCount + windowsWorkstationCount + linuxServerCount;
   const distributionSegments = [
@@ -226,14 +235,14 @@ export function DashboardPage() {
                       className="bar linux chart-hover-target"
                       data-tooltip={linuxTooltip}
                       role="img"
-                      style={{ height: `${entry.linux * 14}px` }}
+                      style={{ height: `${barPx(entry.linux)}px` }}
                       title={linuxTooltip}
                     />
                     <div
                       className="bar windows chart-hover-target"
                       data-tooltip={windowsTooltip}
                       role="img"
-                      style={{ height: `${entry.windows * 14}px` }}
+                      style={{ height: `${barPx(entry.windows)}px` }}
                       title={windowsTooltip}
                     />
                   </div>
