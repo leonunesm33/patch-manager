@@ -1359,6 +1359,19 @@ def submit_agent_inventory(
 
     _sync_inventory_patches(db, payload.agent_id, managed_machine_id, pending_inventory_items)
 
+    # Recomputa pending_patches a partir dos patches realmente pendentes de aprovacao no PM,
+    # nao pelo total de upgradable_packages do OS (que pode incluir pacotes ja instalados
+    # pelo PM enquanto o cache apt ainda nao foi atualizado no host).
+    target = f"machine:{managed_machine_id}"
+    pending_pm_count = sum(
+        1 for p in PatchRepository(db).list_by_target(target)
+        if p.approval_status == "pending"
+    )
+    machine_refreshed = machine_repository.get_by_id(managed_machine_id)
+    if machine_refreshed is not None:
+        machine_refreshed.pending_patches = pending_pm_count
+        machine_repository.update(machine_refreshed)
+
     return {"status": "ok"}
 
 
@@ -1536,7 +1549,6 @@ def submit_agent_job_result(
     job_repository.update(job)
 
     if machine is not None and result == "applied":
-        machine.pending_patches = max(machine.pending_patches - 1, 0)
         machine.last_check_in = datetime.now(UTC)
         machine_repository.update(machine)
 
