@@ -179,7 +179,7 @@ def execute_patch_job_with_mode(
         apt_apply_timeout_seconds = _resolve_runtime_timeout(job, apt_apply_timeout_seconds)
 
         if not real_apply_enabled:
-            code, output = _run(["apt-get", "-s", "install", "-y", package_name], timeout=60)
+            code, output = _run(["sudo", "apt-get", "-s", "install", "-y", package_name], timeout=60)
             if code == 0:
                 return (
                     "failed",
@@ -207,6 +207,7 @@ def execute_patch_job_with_mode(
 
         code, output = _run(
             [
+                "sudo",
                 "apt-get",
                 "-o",
                 "Dpkg::Options::=--force-confold",
