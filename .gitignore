@@ -38,7 +38,10 @@ infra/compose/.env
 *.p12
 *secret*.json
 *credentials*.json
+# Documentos de projeto legados (substituidos pelo CLAUDE.md)
 Patch-manager-estrutura-completa.docx
 Patch-manager-estrutura-completa.pdf
 patch-manager-inicial.html
 patch_manager_estrutura_completa.md
+# Cache de ferramentas de teste/automacao
+.playwright-mcp/
