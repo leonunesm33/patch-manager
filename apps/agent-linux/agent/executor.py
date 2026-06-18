@@ -67,19 +67,29 @@ def _resolve_runtime_timeout(job: dict[str, object], fallback: int) -> int:
         return fallback
 
 
-def _list_upgradable_packages() -> set[str]:
-    code, output = _run(["apt", "list", "--upgradable"], timeout=30)
+def _check_upgrade_needed(package_name: str) -> bool:
+    """Return True if apt-cache policy shows the package has a pending upgrade.
+
+    Uses apt-cache policy instead of apt list --upgradable so that dist-upgrade-only
+    packages (visible via python3-apt but absent from apt list) are handled correctly.
+    On any error, returns True to let apt-get decide.
+    """
+    code, output = _run(["apt-cache", "policy", package_name], timeout=30)
     if code != 0:
-        return set()
-    packages: set[str] = set()
+        return True
+    installed = None
+    candidate = None
     for line in output.splitlines():
-        entry = line.strip()
-        if not entry or entry.lower().startswith("listing..."):
-            continue
-        package_name = entry.split("/", 1)[0].strip()
-        if package_name:
-            packages.add(package_name)
-    return packages
+        stripped = line.strip()
+        if stripped.startswith("Installed:"):
+            installed = stripped.split(":", 1)[1].strip()
+        elif stripped.startswith("Candidate:"):
+            candidate = stripped.split(":", 1)[1].strip()
+    if installed is None or candidate is None or candidate in ("(none)", "none"):
+        return True
+    if installed == "(none)":
+        return True  # not installed; let apt-get handle it
+    return installed != candidate
 
 
 def _has_security_candidate(package_name: str) -> bool:
@@ -198,8 +208,7 @@ def execute_patch_job_with_mode(
         if effective_config is not None and not _is_package_allowed(effective_config, package_name):
             return "failed", f"Package {package_name} is not allowed by local guardrails.", False
 
-        upgradable_packages = _list_upgradable_packages()
-        if package_name not in upgradable_packages:
+        if not _check_upgrade_needed(package_name):
             return "applied", f"Package {package_name} is already at the latest available version on this host.", False
 
         if allow_security_only and not _has_security_candidate(package_name):
@@ -218,9 +227,18 @@ def execute_patch_job_with_mode(
             ],
             timeout=apt_apply_timeout_seconds,
         )
-        if code == 0:
-            return "applied", None, _is_reboot_required()
-        return "failed", output or f"Unable to apply upgrade for package {package_name}", False
+        if code != 0:
+            return "failed", output or f"Unable to apply upgrade for package {package_name}", False
+        # Verify the package was actually upgraded; apt-get exits 0 even when --only-upgrade
+        # skips the install (e.g. package not in simple-upgrade path but in dist-upgrade).
+        if _check_upgrade_needed(package_name):
+            return (
+                "failed",
+                f"apt-get exited 0 but {package_name} still shows a pending upgrade — "
+                "install may have been skipped (dist-upgrade dependency). Check dpkg logs.",
+                False,
+            )
+        return "applied", None, _is_reboot_required()
 
     code, output = _run(["apt-cache", "policy", package_name])
     if code == 0 and output:
