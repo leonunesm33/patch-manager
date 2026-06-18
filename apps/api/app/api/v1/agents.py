@@ -145,6 +145,9 @@ def _sync_inventory_patches(
         expected_patch_ids.add(patch_id)
         severity = _inventory_patch_severity(item)
         category = _inventory_patch_category(item)
+        # Patches do arquivo de seguranca nao devem ter severity abaixo de moderate
+        if category == "security" and severity in {"low", "unknown"}:
+            severity = "moderate"
         existing = patch_repository.get_by_id(patch_id)
         patch = existing or PatchModel(
             id=patch_id,
@@ -1359,13 +1362,14 @@ def submit_agent_inventory(
 
     _sync_inventory_patches(db, payload.agent_id, managed_machine_id, pending_inventory_items)
 
-    # Recomputa pending_patches a partir dos patches realmente pendentes de aprovacao no PM,
-    # nao pelo total de upgradable_packages do OS (que pode incluir pacotes ja instalados
-    # pelo PM enquanto o cache apt ainda nao foi atualizado no host).
+    # Recomputa pending_patches como count de patches nao instalados no PM:
+    # "pending" (aguardando decisao) + "approved" (aprovados, aguardando instalacao).
+    # Isso alinha com o total de upgradable_packages do OS e com a visao "Todos"
+    # na tela de Aprovacoes. "rejected" e excluido (decisao tomada).
     target = f"machine:{managed_machine_id}"
     pending_pm_count = sum(
         1 for p in PatchRepository(db).list_by_target(target)
-        if p.approval_status == "pending"
+        if p.approval_status in {"pending", "approved"}
     )
     machine_refreshed = machine_repository.get_by_id(managed_machine_id)
     if machine_refreshed is not None:

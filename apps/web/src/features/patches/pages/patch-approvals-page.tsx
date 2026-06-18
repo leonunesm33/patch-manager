@@ -180,9 +180,8 @@ export function PatchApprovalsPage() {
   }
 
   const filteredPatches = patches.filter(patchMatchesFilters);
-  const pendingPatches = filteredPatches.filter((patch) => patch.approval_status === "pending");
   const installedExecutions = executions.filter((e) => e.result === "applied" && executionMatchesFilters(e));
-  const pendingPagination = usePagination(pendingPatches);
+  const displayPagination = usePagination(filteredPatches);
   const installedPagination = usePagination(installedExecutions);
   const categoryOptions = uniqueValues(patches.map((patch) => patch.category));
   const severityOptions = uniqueValues(patches.map((patch) => patch.severity));
@@ -386,12 +385,18 @@ export function PatchApprovalsPage() {
       />
       <section className="panel section">
         <div className="section-header">
-          <h2 className="section-title">Patches pendentes</h2>
+          <h2 className="section-title">
+            {approvalStatusFilter === "approved"
+              ? "Patches aprovados"
+              : approvalStatusFilter === "rejected"
+                ? "Patches rejeitados"
+                : "Patches pendentes"}
+          </h2>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <span className="muted">
               {loading
                 ? "Carregando da API..."
-                : `${pendingPatches.length} pendentes`}
+                : `${filteredPatches.length} ${approvalStatusFilter === "approved" ? "aprovados" : approvalStatusFilter === "rejected" ? "rejeitados" : approvalStatusFilter === "pending" ? "pendentes" : "encontrados"}`}
             </span>
             <button className="btn" onClick={() => setShowFilters((current) => !current)} type="button">
               Filtros
@@ -523,18 +528,18 @@ export function PatchApprovalsPage() {
           </p>
         ) : null}
         {renderPatchTable(
-          pendingPagination.pageItems,
+          displayPagination.pageItems,
           machineIdFilter
-            ? "Este host reportou pendencias no resumo, mas ainda nao enviou patches pendentes para o filtro atual."
-            : "Nenhum patch pendente para o filtro atual.",
+            ? "Este host reportou pendencias no resumo, mas ainda nao enviou patches para o filtro atual."
+            : "Nenhum patch encontrado para o filtro atual.",
         )}
         <Pagination
-          page={pendingPagination.page}
-          totalPages={pendingPagination.totalPages}
-          from={pendingPagination.from}
-          to={pendingPagination.to}
-          total={pendingPagination.total}
-          onPageChange={pendingPagination.setPage}
+          page={displayPagination.page}
+          totalPages={displayPagination.totalPages}
+          from={displayPagination.from}
+          to={displayPagination.to}
+          total={displayPagination.total}
+          onPageChange={displayPagination.setPage}
         />
       </section>
 
