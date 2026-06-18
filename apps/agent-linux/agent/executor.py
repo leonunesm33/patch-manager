@@ -220,7 +220,6 @@ def execute_patch_job_with_mode(
                 "apt-get",
                 "-o",
                 "Dpkg::Options::=--force-confold",
-                "--only-upgrade",
                 "install",
                 "-y",
                 package_name,
