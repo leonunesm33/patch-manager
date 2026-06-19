@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   createMachine,
   createMachineGroup,
@@ -322,6 +322,36 @@ export function MachinesPage() {
   ].filter(Boolean).length;
   const shouldShowOperationalDetails = detailsLoading || detailsError || machineDetails;
   const machinesPagination = usePagination(filteredMachines);
+
+  const selectableIds = filteredMachines
+    .filter((m) => m.id.startsWith("agent-"))
+    .map((m) => m.id);
+  const selectedCount = selectableIds.filter((id) => selectedMachineIds.has(id)).length;
+  const selectAllChecked = selectableIds.length > 0 && selectedCount === selectableIds.length;
+  const selectAllIndeterminate = selectedCount > 0 && selectedCount < selectableIds.length;
+  const selectAllRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = selectAllIndeterminate;
+    }
+  }, [selectAllIndeterminate]);
+
+  function handleSelectAll() {
+    if (selectAllChecked || selectAllIndeterminate) {
+      setSelectedMachineIds((current) => {
+        const next = new Set(current);
+        selectableIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedMachineIds((current) => {
+        const next = new Set(current);
+        selectableIds.forEach((id) => next.add(id));
+        return next;
+      });
+    }
+  }
 
   return (
     <div className="single-panel-grid">
@@ -702,7 +732,17 @@ export function MachinesPage() {
         <table className="table">
           <thead>
             <tr>
-              <th style={{ width: 32 }}></th>
+              <th style={{ width: 32 }}>
+                <input
+                  type="checkbox"
+                  ref={selectAllRef}
+                  checked={selectAllChecked}
+                  onChange={handleSelectAll}
+                  disabled={selectableIds.length === 0}
+                  aria-label="Selecionar todas as maquinas gerenciadas"
+                  title="Selecionar todas as maquinas gerenciadas"
+                />
+              </th>
               <th>Host</th>
               <th>IP</th>
               <th>Plataforma</th>
