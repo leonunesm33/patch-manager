@@ -5,6 +5,7 @@ export type ReportItem = {
   patch: string;
   platform: string;
   severity: string;
+  category: string;
   result: string;
   duration: string;
 };
@@ -34,6 +35,7 @@ export type PatchJobItem = {
   patch_id: string;
   platform: string;
   severity: string;
+  category: string;
   status: "pending" | "running" | "completed" | "failed";
   claimed_by_agent: string | null;
   claimed_at: string | null;

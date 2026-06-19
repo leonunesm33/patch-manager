@@ -183,7 +183,9 @@ export function PatchApprovalsPage() {
   const installedExecutions = executions.filter((e) => e.result === "applied" && executionMatchesFilters(e));
   const displayPagination = usePagination(filteredPatches);
   const installedPagination = usePagination(installedExecutions);
-  const categoryOptions = uniqueValues(patches.map((patch) => patch.category));
+  const CATEGORY_OPTIONS = [
+    "security", "bugfix", "enhancement", "driver", "firmware", "stability", "feature", "other", "unknown",
+  ];
   const severityOptions = uniqueValues(patches.map((patch) => patch.severity));
   const platformOptions = uniqueValues(
     patches.flatMap((patch) => [
@@ -467,7 +469,7 @@ export function PatchApprovalsPage() {
                     onChange={(event) => updateFilter("category", event.target.value)}
                   >
                     <option value="">Todas</option>
-                    {categoryOptions.map((category) => (
+                    {CATEGORY_OPTIONS.map((category) => (
                       <option key={category} value={category}>
                         {getCategoryLabel(category)}
                       </option>

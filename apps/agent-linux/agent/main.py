@@ -2,9 +2,11 @@ import logging
 import os
 import platform
 import socket
+import subprocess
 import threading
 import sys
 import time
+import urllib.parse
 from urllib import error
 
 CURRENT_DIR = os.path.dirname(__file__)
@@ -245,15 +247,29 @@ def main() -> None:
 
             command = poll_command(config)
             if command and command.get("id"):
-                logger.info("Processing command %s of type %s", command["id"], command.get("command_type"))
-                result, message = execute_manual_reboot_command(command, config)
-                submit_command_result(config, str(command["id"]), result, message)
-                logger.info(
-                    "Finished command %s with result %s%s",
-                    command["id"],
-                    result,
-                    f" | {message}" if message else "",
-                )
+                command_type = str(command.get("command_type", "")).strip().lower()
+                logger.info("Processing command %s of type %s", command["id"], command_type)
+                if command_type == "upgrade_agent":
+                    submit_command_result(config, str(command["id"]), "applied", "Upgrade do agente iniciado.")
+                    server_url = config.server_url.rstrip("/")
+                    encoded_url = urllib.parse.quote(server_url, safe="")
+                    upgrade_url = f"{server_url}/api/v1/agents/install/linux-upgrade.sh?server_url={encoded_url}"
+                    subprocess.Popen(
+                        ["bash", "-c", f'sleep 3 && curl -fsSL "{upgrade_url}" | sudo bash'],
+                        start_new_session=True,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    logger.info("Upgrade script scheduled for agent %s", config.agent_id)
+                else:
+                    result, message = execute_manual_reboot_command(command, config)
+                    submit_command_result(config, str(command["id"]), result, message)
+                    logger.info(
+                        "Finished command %s with result %s%s",
+                        command["id"],
+                        result,
+                        f" | {message}" if message else "",
+                    )
                 continue
 
             job = claim_job(config)

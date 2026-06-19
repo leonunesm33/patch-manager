@@ -8,5 +8,6 @@ class ReportItem(BaseModel):
     patch: str
     platform: str
     severity: str
+    category: str = "unknown"
     result: str
     duration: str

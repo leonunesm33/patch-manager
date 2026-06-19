@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_viewer
 from app.repositories.execution_log_repository import ExecutionLogRepository
+from app.repositories.patch_repository import PatchRepository
 from app.schemas.auth import UserResponse
 from app.schemas.report import ReportItem
 
@@ -18,6 +19,9 @@ def list_reports(
 ) -> list[ReportItem]:
     repository = ExecutionLogRepository(db)
     logs = repository.list_recent()
+    patch_category: dict[str, str] = {
+        p.id: p.category for p in PatchRepository(db).list_all()
+    }
     return [
         ReportItem(
             date=log.executed_at.strftime("%d/%m %H:%M"),
@@ -26,6 +30,7 @@ def list_reports(
             patch=log.patch_id,
             platform=log.platform,
             severity=log.severity,
+            category=patch_category.get(log.patch_id, "unknown"),
             result=log.result,
             duration=f"{log.duration_seconds // 60}m {log.duration_seconds % 60:02d}s",
         )

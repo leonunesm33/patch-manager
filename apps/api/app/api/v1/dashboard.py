@@ -61,8 +61,15 @@ def get_dashboard(
 
     _LINUX_PLATFORMS = {"ubuntu", "linux", "debian", "rhel"}
 
+    security_patch_ids = {p.id for p in patches if p.category == "security"}
     monitored_machines = len(machines)
     pending_patches = sum(machine.pending_patches for machine in machines)
+    security_pending_patches = sum(
+        1 for p in patches if p.category == "security" and p.approval_status == "pending"
+    )
+    security_installed_patches = sum(
+        1 for log in logs if log.result == "applied" and log.patch_id in security_patch_ids
+    )
     total_logs = len(logs)
     successful_logs = len([log for log in logs if log.result == "applied"])
     compliance_rate = round((successful_logs / total_logs) * 100, 1) if total_logs else 100.0
@@ -126,6 +133,8 @@ def get_dashboard(
             reboot_scheduled_hosts=len(reboot_scheduled_agents),
             pending_agent_commands=pending_commands,
             windows_pending_updates=windows_pending_updates,
+            security_pending_patches=security_pending_patches,
+            security_installed_patches=security_installed_patches,
         ),
         activity=recent_activity,
         patch_volume=[

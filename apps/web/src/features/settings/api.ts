@@ -98,6 +98,19 @@ export function requestConnectedAgentReboot(agentId: string) {
   });
 }
 
+export function requestConnectedAgentUpgrade(agentId: string) {
+  return http<{ status: string }>(`/agents/connected/${agentId}/upgrade`, {
+    method: "POST",
+  });
+}
+
+export function requestConnectedAgentsBatchUpgrade(agentIds: string[]) {
+  return http<{ queued: number }>("/agents/connected/upgrade-batch", {
+    method: "POST",
+    body: JSON.stringify({ agent_ids: agentIds }),
+  });
+}
+
 export function updateLinuxExecutionMode(
   linux_agent_mode: "dry-run" | "apply",
   machine_group?: string,

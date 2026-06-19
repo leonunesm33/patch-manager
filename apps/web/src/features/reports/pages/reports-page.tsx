@@ -49,18 +49,38 @@ export function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exportingFormat, setExportingFormat] = useState<string | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState("");
 
-  const guardrailBlockedJobs = jobs.filter((job) => job.failure_reason?.startsWith("guardrail_"));
-  const pendingJobs = jobs.filter((job) => job.status === "pending");
-  const runningJobs = jobs.filter((job) => job.status === "running");
-  const completedJobs = jobs.filter((job) => job.status === "completed");
-  const failedJobs = jobs.filter((job) => job.status === "failed");
-  const successfulExecutions = rows.filter((row) => row.result === "applied" || row.result === "completed");
-  const failedExecutions = rows.filter((row) => row.result === "failed");
+  const CATEGORY_OPTIONS = [
+    { value: "security", label: "Seguranca" },
+    { value: "bugfix", label: "Bug Fix" },
+    { value: "enhancement", label: "Melhoria" },
+    { value: "driver", label: "Driver" },
+    { value: "firmware", label: "Firmware" },
+    { value: "stability", label: "Estabilidade" },
+    { value: "feature", label: "Funcional" },
+    { value: "other", label: "Outros" },
+    { value: "unknown", label: "Geral" },
+  ];
+
+  const filteredJobs = categoryFilter
+    ? jobs.filter((job) => job.category === categoryFilter)
+    : jobs;
+  const filteredRows = categoryFilter
+    ? rows.filter((row) => row.category === categoryFilter)
+    : rows;
+
+  const guardrailBlockedJobs = filteredJobs.filter((job) => job.failure_reason?.startsWith("guardrail_"));
+  const pendingJobs = filteredJobs.filter((job) => job.status === "pending");
+  const runningJobs = filteredJobs.filter((job) => job.status === "running");
+  const completedJobs = filteredJobs.filter((job) => job.status === "completed");
+  const failedJobs = filteredJobs.filter((job) => job.status === "failed");
+  const successfulExecutions = filteredRows.filter((row) => row.result === "applied" || row.result === "completed");
+  const failedExecutions = filteredRows.filter((row) => row.result === "failed");
   const totalFailures = failedJobs.length + failedExecutions.length;
   const installedPagination = usePagination(successfulExecutions);
-  const jobsPagination = usePagination(jobs);
-  const rowsPagination = usePagination(rows);
+  const jobsPagination = usePagination(filteredJobs);
+  const rowsPagination = usePagination(filteredRows);
 
   useEffect(() => {
     let active = true;
@@ -266,7 +286,21 @@ export function ReportsPage() {
                 : `${rows.length} execucoes e ${jobs.length} jobs recentes`}
             </span>
           </div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span className="field-label" style={{ margin: 0, whiteSpace: "nowrap" }}>Categoria</span>
+              <select
+                className="select"
+                value={categoryFilter}
+                onChange={(event) => setCategoryFilter(event.target.value)}
+                style={{ minWidth: 130 }}
+              >
+                <option value="">Todas</option>
+                {CATEGORY_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </label>
             {(["xlsx", "pdf", "csv", "json", "html"] as const).map((format) => (
               <button
                 className={format === "xlsx" ? "btn btn-primary" : "btn"}

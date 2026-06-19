@@ -776,9 +776,15 @@ def list_patch_jobs(
     _: Annotated[UserResponse, Depends(get_current_user)],
 ) -> list[PatchJobItem]:
     repository = PatchJobRepository(db)
+    patch_category: dict[str, str] = {
+        p.id: p.category for p in PatchRepository(db).list_all()
+    }
     return [
         PatchJobItem.model_validate(job).model_copy(
-            update={"failure_reason": _classify_job_failure(job.error_message)}
+            update={
+                "failure_reason": _classify_job_failure(job.error_message),
+                "category": patch_category.get(job.patch_id, "unknown"),
+            }
         )
         for job in repository.list_recent()
     ]
@@ -1020,6 +1026,67 @@ def request_connected_agent_reboot(
         f"Solicitou reboot manual para o agente {agent_id}.",
     )
     return {"status": "queued"}
+
+
+@router.post("/connected/{agent_id}/upgrade")
+def request_connected_agent_upgrade(
+    agent_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserResponse, Depends(get_current_user)],
+) -> dict[str, str]:
+    connected_agent = agent_registry_service.get_connected(agent_id)
+    if connected_agent is None:
+        raise HTTPException(status_code=404, detail="Connected agent not found")
+
+    AgentCommandRepository(db).add(
+        AgentCommandModel(
+            id=f"cmd-{secrets.token_hex(8)}",
+            agent_id=agent_id,
+            command_type="upgrade_agent",
+            status="pending",
+            requested_by=current_user.username,
+            payload_json=json.dumps({"requested_by": current_user.username}),
+        )
+    )
+    SettingsService(db).record_operational_event(
+        "agent_upgrade_requested",
+        current_user.username,
+        f"Solicitou upgrade do agente {agent_id}.",
+    )
+    return {"status": "queued"}
+
+
+@router.post("/connected/upgrade-batch")
+def request_connected_agents_upgrade_batch(
+    payload: dict[str, list[str]],
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserResponse, Depends(get_current_user)],
+) -> dict[str, int]:
+    agent_ids = payload.get("agent_ids", [])
+    command_repository = AgentCommandRepository(db)
+    settings_service = SettingsService(db)
+    queued = 0
+    for agent_id in agent_ids:
+        if agent_registry_service.get_connected(agent_id) is None:
+            continue
+        command_repository.add(
+            AgentCommandModel(
+                id=f"cmd-{secrets.token_hex(8)}",
+                agent_id=agent_id,
+                command_type="upgrade_agent",
+                status="pending",
+                requested_by=current_user.username,
+                payload_json=json.dumps({"requested_by": current_user.username}),
+            )
+        )
+        queued += 1
+    if queued:
+        settings_service.record_operational_event(
+            "agent_upgrade_batch_requested",
+            current_user.username,
+            f"Upgrade em lote solicitado para {queued} agente(s).",
+        )
+    return {"queued": queued}
 
 
 @router.get("/commands/recent", response_model=list[AgentCommandHistoryItem])

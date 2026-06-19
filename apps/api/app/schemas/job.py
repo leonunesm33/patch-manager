@@ -12,6 +12,7 @@ class PatchJobItem(BaseModel):
     patch_id: str
     platform: str
     severity: str
+    category: str = "unknown"
     status: str
     claimed_by_agent: str | None = None
     claimed_at: datetime | None = None

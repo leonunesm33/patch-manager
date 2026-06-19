@@ -11,6 +11,10 @@ import {
 } from "@/features/machines/api";
 import { ActionMenu } from "@/components/common/action-menu";
 import { ConfirmModal } from "@/components/common/confirm-modal";
+import {
+  requestConnectedAgentUpgrade,
+  requestConnectedAgentsBatchUpgrade,
+} from "@/features/settings/api";
 import { MachineOperationalDetailsPanel } from "@/features/machines/components/machine-operational-details-panel";
 import type {
   Machine,
@@ -59,6 +63,8 @@ export function MachinesPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [managementFilter, setManagementFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedMachineIds, setSelectedMachineIds] = useState<Set<string>>(new Set());
+  const [upgradeFeedback, setUpgradeFeedback] = useState<string | null>(null);
   const [showGroupManager, setShowGroupManager] = useState(false);
   const [showMachineForm, setShowMachineForm] = useState(false);
   const [groupForm, setGroupForm] = useState({ name: "", description: "" });
@@ -254,6 +260,34 @@ export function MachinesPage() {
       setDetailsError(err instanceof Error ? err.message : "Falha ao carregar os detalhes operacionais.");
     } finally {
       setDetailsLoading(false);
+    }
+  }
+
+  async function handleUpgradeAgent(machine: Machine) {
+    const agentId = machine.id.replace(/^agent-/, "");
+    try {
+      await requestConnectedAgentUpgrade(agentId);
+      setUpgradeFeedback(`Upgrade solicitado para ${machine.name}. O agente reiniciara em instantes.`);
+      setTimeout(() => setUpgradeFeedback(null), 6000);
+    } catch (err) {
+      setUpgradeFeedback(err instanceof Error ? err.message : "Falha ao solicitar upgrade.");
+      setTimeout(() => setUpgradeFeedback(null), 6000);
+    }
+  }
+
+  async function handleBatchUpgrade() {
+    const agentIds = Array.from(selectedMachineIds)
+      .filter((id) => id.startsWith("agent-"))
+      .map((id) => id.replace(/^agent-/, ""));
+    if (agentIds.length === 0) return;
+    try {
+      const result = await requestConnectedAgentsBatchUpgrade(agentIds);
+      setUpgradeFeedback(`Upgrade solicitado para ${result.queued} agente(s). Os agentes reiniciarao em instantes.`);
+      setSelectedMachineIds(new Set());
+      setTimeout(() => setUpgradeFeedback(null), 6000);
+    } catch (err) {
+      setUpgradeFeedback(err instanceof Error ? err.message : "Falha ao solicitar upgrade em lote.");
+      setTimeout(() => setUpgradeFeedback(null), 6000);
     }
   }
 
@@ -565,6 +599,21 @@ export function MachinesPage() {
             <span className="muted">
               {loading ? "Carregando da API..." : `${filteredMachines.length} de ${machines.length} maquinas`}
             </span>
+            {selectedMachineIds.size > 0 ? (
+              <>
+                <span className="muted">{selectedMachineIds.size} selecionadas</span>
+                <button
+                  className="btn btn-primary btn-primary-uniform"
+                  onClick={() => void handleBatchUpgrade()}
+                  type="button"
+                >
+                  Atualizar agentes selecionados
+                </button>
+                <button className="btn" onClick={() => setSelectedMachineIds(new Set())} type="button">
+                  Limpar selecao
+                </button>
+              </>
+            ) : null}
             <button className="btn" onClick={() => void loadMachines()} type="button">
               Atualizar
             </button>
@@ -586,6 +635,9 @@ export function MachinesPage() {
             </button>
           </div>
         </div>
+        {upgradeFeedback ? (
+          <p className="muted" style={{ marginBottom: 8 }}>{upgradeFeedback}</p>
+        ) : null}
 
         {error ? (
           <p className="muted" style={{ marginTop: 0, marginBottom: 16 }}>
@@ -650,6 +702,7 @@ export function MachinesPage() {
         <table className="table">
           <thead>
             <tr>
+              <th style={{ width: 32 }}></th>
               <th>Host</th>
               <th>IP</th>
               <th>Plataforma</th>
@@ -665,13 +718,33 @@ export function MachinesPage() {
           <tbody>
             {!loading && filteredMachines.length === 0 ? (
               <tr>
-                <td colSpan={10} className="muted">
+                <td colSpan={11} className="muted">
                   Nenhuma maquina encontrada com os filtros atuais.
                 </td>
               </tr>
             ) : null}
             {machinesPagination.pageItems.map((machine) => (
               <tr key={machine.id}>
+                <td>
+                  {machine.id.startsWith("agent-") ? (
+                    <input
+                      type="checkbox"
+                      checked={selectedMachineIds.has(machine.id)}
+                      onChange={(event) => {
+                        setSelectedMachineIds((current) => {
+                          const next = new Set(current);
+                          if (event.target.checked) {
+                            next.add(machine.id);
+                          } else {
+                            next.delete(machine.id);
+                          }
+                          return next;
+                        });
+                      }}
+                      aria-label={`Selecionar ${machine.name}`}
+                    />
+                  ) : null}
+                </td>
                 <td style={{ fontWeight: 700 }}>{machine.name}</td>
                 <td className="code">{machine.ip}</td>
                 <td>{machine.platform}</td>
@@ -731,6 +804,11 @@ export function MachinesPage() {
                       {
                         label: "Abrir pagina do host",
                         onSelect: () => navigate(`/machines/${machine.id}`),
+                      },
+                      {
+                        label: "Atualizar agente",
+                        disabled: !machine.id.startsWith("agent-"),
+                        onSelect: () => void handleUpgradeAgent(machine),
                       },
                       {
                         label: "Editar",

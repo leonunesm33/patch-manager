@@ -10,6 +10,8 @@ class DashboardSummary(BaseModel):
     reboot_scheduled_hosts: int
     pending_agent_commands: int
     windows_pending_updates: int
+    security_pending_patches: int = 0
+    security_installed_patches: int = 0
 
 
 class ActivityItem(BaseModel):

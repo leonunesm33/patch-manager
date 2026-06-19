@@ -7,6 +7,8 @@ export type DashboardSummary = {
   reboot_scheduled_hosts: number;
   pending_agent_commands: number;
   windows_pending_updates: number;
+  security_pending_patches: number;
+  security_installed_patches: number;
 };
 
 export type ActivityItem = {

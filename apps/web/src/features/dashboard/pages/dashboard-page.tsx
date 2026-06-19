@@ -92,6 +92,18 @@ export function DashboardPage() {
           detail: "updates reportados pelo pool Windows",
           tone: "#3dd9b8",
         },
+        {
+          label: "Seguranca pendente",
+          value: String(data.summary.security_pending_patches),
+          detail: "patches de seguranca aguardando aprovacao",
+          tone: "#ff4d6a",
+        },
+        {
+          label: "Seguranca instalada",
+          value: String(data.summary.security_installed_patches),
+          detail: "patches de seguranca aplicados (registros recentes)",
+          tone: "#00e5a0",
+        },
       ]
     : [];
 
