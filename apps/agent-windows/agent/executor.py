@@ -133,7 +133,14 @@ def execute_windows_job(
             timeout=_resolve_timeout(job, "windows_command_timeout_seconds", config.windows_command_timeout_seconds),
         )
         if code == 0:
-            return "applied", None, False
+            return (
+                "applied",
+                "[dry-run] Ambiente PowerShell validado. Nenhum patch instalado. "
+                "Para executar instalacoes reais, defina PATCH_MANAGER_EXECUTION_MODE=apply "
+                "e habilite PATCH_MANAGER_ENABLE_WINDOWS_SCAN_APPLY=true e "
+                "PATCH_MANAGER_ENABLE_WINDOWS_DOWNLOAD_INSTALL=true no arquivo .env do agente.",
+                False,
+            )
         return "failed", output or "Falha ao validar ambiente PowerShell do agente Windows.", False
 
     if not _resolve_bool(job, "windows_scan_apply_enabled", config.enable_windows_scan_apply):
@@ -153,7 +160,13 @@ def execute_windows_job(
         config.enable_windows_download_install,
     )
     if not download_install_enabled:
-        return "applied", None, _is_reboot_required()
+        return (
+            "applied",
+            "[scan-only] Varredura de atualizacoes concluida via UsoClient. "
+            "Nenhum patch foi baixado ou instalado. "
+            "Para instalar, defina PATCH_MANAGER_ENABLE_WINDOWS_DOWNLOAD_INSTALL=true no arquivo .env do agente.",
+            _is_reboot_required(),
+        )
 
     code, output = _run_powershell_step(
         "Start-Process UsoClient.exe -ArgumentList 'StartDownload' -Wait; 'StartDownload completed'",
