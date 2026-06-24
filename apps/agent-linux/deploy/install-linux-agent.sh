@@ -31,9 +31,9 @@ sudo chmod 440 /etc/sudoers.d/patch-manager
 sudo rm -f /etc/sudoers.d/patch-manager-shutdown
 
 sudo systemctl daemon-reload
+sudo systemctl enable --now "${SERVICE_NAME}"
 
 echo "Instalacao concluida."
-echo "Revise ${ENV_TARGET} antes de iniciar o servico."
-echo "Comandos sugeridos:"
-echo "  sudo systemctl enable --now ${SERVICE_NAME}"
+echo "Revise ${ENV_TARGET} conforme necessario."
+echo "Logs:"
 echo "  sudo journalctl -u ${SERVICE_NAME} -f"

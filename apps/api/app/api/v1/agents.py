@@ -421,6 +421,7 @@ fi
 
 sudo chown -R patchmanager:patchmanager "${{INSTALL_ROOT}}" /var/log/patch-manager
 sudo systemctl daemon-reload
+sudo systemctl enable "${{SERVICE_NAME}}"
 sudo systemctl restart "${{SERVICE_NAME}}"
 
 echo "Atualizacao concluida."
@@ -511,6 +512,7 @@ PATCH_MANAGER_LOG_FILE=$LogFile
 [System.Environment]::SetEnvironmentVariable("PATCH_MANAGER_ENV_FILE", $EnvTarget, "Machine")
 
 & $AgentExeTarget install | Out-Null
+sc.exe config $ServiceName start= auto | Out-Null
 sc.exe failure $ServiceName reset= 86400 actions= restart/5000/restart/30000/restart/60000 | Out-Null
 Start-Service -Name $ServiceName
 
@@ -620,6 +622,7 @@ if ($null -eq $svc) {{
   sc.exe failure $ServiceName reset= 86400 actions= restart/5000/restart/30000/restart/60000 | Out-Null
 }}
 
+sc.exe config $ServiceName start= auto | Out-Null
 Start-Service -Name $ServiceName
 
 Write-Host "Atualizacao concluida."
