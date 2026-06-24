@@ -506,7 +506,7 @@ PATCH_MANAGER_LOG_LEVEL=INFO
 PATCH_MANAGER_LOG_TO_STDOUT=true
 PATCH_MANAGER_LOG_FILE=$LogFile
 "@
-[System.IO.File]::WriteAllText($EnvTarget, $EnvContent, [System.Text.UTF8Encoding]::new($false))
+[System.IO.File]::WriteAllText($EnvTarget, $EnvContent, (New-Object System.Text.UTF8Encoding($false)))
 
 [System.Environment]::SetEnvironmentVariable("PATCH_MANAGER_ENV_FILE", $EnvTarget, "Machine")
 
