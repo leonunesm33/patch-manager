@@ -118,7 +118,7 @@ def load_config() -> AgentConfig:
             "PATCH_MANAGER_ENABLE_WINDOWS_DOWNLOAD_INSTALL", ""
         ).strip().lower()
         in {"1", "true", "yes", "on"},
-        windows_command_timeout_seconds=max(_read_int("PATCH_MANAGER_WINDOWS_COMMAND_TIMEOUT", 60), 10),
+        windows_command_timeout_seconds=max(_read_int("PATCH_MANAGER_WINDOWS_COMMAND_TIMEOUT", 1800), 10),
         enable_host_reboot=_read_bool("PATCH_MANAGER_ENABLE_WINDOWS_HOST_REBOOT", False),
         simulate_host_reboot=_read_bool("PATCH_MANAGER_SIMULATE_WINDOWS_HOST_REBOOT", False),
         reboot_command_timeout_seconds=max(_read_int("PATCH_MANAGER_WINDOWS_REBOOT_COMMAND_TIMEOUT", 30), 5),

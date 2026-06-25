@@ -120,6 +120,49 @@ def execute_reboot_command(
     return "failed", output or "Falha ao agendar reboot no host Windows."
 
 
+# WUA COM API result codes: 2=Succeeded, 3=SucceededWithErrors, 4=Failed, 5=Aborted
+_WUA_INSTALL_SCRIPT = """\
+$ErrorActionPreference = 'Stop'
+try {
+    $session = New-Object -ComObject Microsoft.Update.Session
+    $searcher = $session.CreateUpdateSearcher()
+    $searchResult = $searcher.Search("IsInstalled=0 and IsHidden=0")
+    $count = $searchResult.Updates.Count
+    Write-Output "WUA_FOUND:$count"
+    if ($count -eq 0) { exit 0 }
+    for ($i = 0; $i -lt $count; $i++) {
+        Write-Output "WUA_UPDATE:$($searchResult.Updates.Item($i).Title)"
+    }
+    $downloader = $session.CreateUpdateDownloader()
+    $downloader.Updates = $searchResult.Updates
+    $dlResult = $downloader.Download()
+    Write-Output "WUA_DOWNLOAD:$($dlResult.ResultCode)"
+    if ($dlResult.ResultCode -ne 2 -and $dlResult.ResultCode -ne 3) {
+        Write-Output "WUA_ERROR:Download falhou (code=$($dlResult.ResultCode))"
+        exit 1
+    }
+    $installer = $session.CreateUpdateInstaller()
+    $installer.Updates = $searchResult.Updates
+    $installResult = $installer.Install()
+    Write-Output "WUA_INSTALL:$($installResult.ResultCode)"
+    Write-Output "WUA_REBOOT:$($installResult.RebootRequired)"
+    if ($installResult.ResultCode -eq 2 -or $installResult.ResultCode -eq 3) { exit 0 }
+    Write-Output "WUA_ERROR:Instalacao falhou (code=$($installResult.ResultCode))"
+    exit 1
+} catch {
+    Write-Output "WUA_ERROR:$_"
+    exit 1
+}
+"""
+
+
+def _parse_wua_reboot(output: str) -> bool:
+    for line in output.splitlines():
+        if line.startswith("WUA_REBOOT:"):
+            return line[11:].strip().lower() in {"true", "1", "yes"}
+    return False
+
+
 def execute_windows_job(
     job: dict[str, object],
     execution_mode: str,
@@ -146,20 +189,20 @@ def execute_windows_job(
     if not _resolve_bool(job, "windows_scan_apply_enabled", config.enable_windows_scan_apply):
         return "failed", "Windows apply path is disabled on this host.", False
 
-    timeout = _resolve_timeout(job, "windows_command_timeout_seconds", config.windows_command_timeout_seconds)
-    code, output = _run_powershell_step(
-        "Start-Process UsoClient.exe -ArgumentList 'StartScan' -Wait; 'StartScan completed'",
-        timeout=timeout,
-    )
-    if code != 0:
-        return "failed", output or "Falha ao executar StartScan no host Windows.", False
-
     download_install_enabled = _resolve_bool(
         job,
         "windows_download_install_enabled",
         config.enable_windows_download_install,
     )
+    timeout = _resolve_timeout(job, "windows_command_timeout_seconds", config.windows_command_timeout_seconds)
+
     if not download_install_enabled:
+        code, output = _run_powershell_step(
+            "Start-Process UsoClient.exe -ArgumentList 'StartScan' -Wait; 'StartScan completed'",
+            timeout=timeout,
+        )
+        if code != 0:
+            return "failed", output or "Falha ao executar StartScan no host Windows.", False
         return (
             "applied",
             "[scan-only] Varredura de atualizacoes concluida via UsoClient. "
@@ -168,17 +211,9 @@ def execute_windows_job(
             _is_reboot_required(),
         )
 
-    code, output = _run_powershell_step(
-        "Start-Process UsoClient.exe -ArgumentList 'StartDownload' -Wait; 'StartDownload completed'",
-        timeout=timeout,
-    )
-    if code != 0:
-        return "failed", output or "Falha ao executar StartDownload no host Windows.", False
-
-    code, output = _run_powershell_step(
-        "Start-Process UsoClient.exe -ArgumentList 'StartInstall' -Wait; 'StartInstall completed'",
-        timeout=timeout,
-    )
+    # Instalacao sincrona via WUA COM API — retorna resultado real (nao fire-and-forget como UsoClient)
+    code, output = _run_powershell_step(_WUA_INSTALL_SCRIPT, timeout=timeout)
+    reboot_required = _parse_wua_reboot(output or "")
     if code == 0:
-        return "applied", None, _is_reboot_required()
-    return "failed", output or "Falha ao executar StartInstall no host Windows.", False
+        return "applied", output or "Atualizacoes Windows instaladas via WUA COM API.", reboot_required
+    return "failed", output or "Falha ao instalar atualizacoes Windows via WUA COM API.", reboot_required
