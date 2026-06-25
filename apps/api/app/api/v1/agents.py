@@ -170,9 +170,11 @@ def _sync_inventory_patches(
         patch_repository.update(patch)
 
     for stale_patch in patch_repository.list_by_target(target):
-        if stale_patch.id not in expected_patch_ids and stale_patch.approval_status in {"pending", "approved"}:
-            # Pacote instalado ou não mais upgradável — remove da fila de aprovação.
-            # "rejected" é preservado como registro da decisão.
+        if stale_patch.id not in expected_patch_ids and stale_patch.approval_status == "pending":
+            # Patch nao aprovado sumiu do inventario — remove com seguranca.
+            # "approved" e "rejected" sao preservados: o operador tomou uma decisao deliberada.
+            # Patches aprovados podem sumir temporariamente do inventario quando o Windows Update
+            # os processa em background apos um scan — deletar causaria perda silenciosa da aprovacao.
             patch_repository.delete(stale_patch)
 
 
