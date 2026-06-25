@@ -271,7 +271,7 @@ def main(stop_event: threading.Event | None = None) -> None:
                     reboot_required,
                     reboot_scheduled,
                     reboot_message,
-                    error_message,
+                    (error_message or "")[:4000] or None,
                 )
                 logger.info(
                     "Finished job %s with result %s%s%s",
