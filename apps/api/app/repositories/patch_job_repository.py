@@ -113,6 +113,18 @@ class PatchJobRepository:
         )
         return self.session.scalar(statement) or 0
 
+    def list_running_before(self, before: "datetime") -> list["PatchJobModel"]:
+        """Retorna jobs travados em 'running' que foram iniciados antes de `before`."""
+        statement = (
+            select(PatchJobModel)
+            .where(
+                PatchJobModel.status == "running",
+                PatchJobModel.claimed_at < before,
+            )
+            .order_by(PatchJobModel.claimed_at.asc())
+        )
+        return list(self.session.scalars(statement))
+
     def exists_active_or_completed_job_since(
         self,
         schedule_id: str,

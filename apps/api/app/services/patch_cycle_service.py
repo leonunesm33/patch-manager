@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 from hashlib import sha1
 import json
 from uuid import uuid4
@@ -34,6 +34,7 @@ class PatchCycleService:
         self.snapshot_repository = AgentInventorySnapshotRepository(session)
 
     def run_once(self) -> PatchCycleRunResponse:
+        self.expire_stuck_running_jobs()
         enqueue_result = self.enqueue_jobs()
         process_result = self.process_pending_jobs()
         return PatchCycleRunResponse(
@@ -397,6 +398,20 @@ class PatchCycleService:
     WINDOW_MAX_AGE_SECONDS: int = 3600  # 60 minutos
     # Número máximo de tentativas por job dentro do mesmo dia antes de parar de retentar.
     MAX_RETRIES_PER_WINDOW: int = 3
+    # Jobs presos em "running" por mais de este tempo são expirados como "failed",
+    # desbloqueando a lógica de dedup e retry do scheduler.
+    STUCK_JOB_THRESHOLD_SECONDS: int = 2100  # 35 minutos (timeout WUA + margem)
+
+    def expire_stuck_running_jobs(self) -> int:
+        """Marca jobs travados em 'running' como 'failed' para desbloquear dedup e retry."""
+        cutoff = datetime.now(UTC) - timedelta(seconds=self.STUCK_JOB_THRESHOLD_SECONDS)
+        stuck = self.patch_job_repository.list_running_before(cutoff)
+        for job in stuck:
+            job.status = "failed"
+            job.error_message = "Job expirado: agente não enviou resultado no tempo esperado"
+            job.finished_at = datetime.now(UTC)
+            self.patch_job_repository.update(job)
+        return len(stuck)
 
     def _is_schedule_window_due(
         self,

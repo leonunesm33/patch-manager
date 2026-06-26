@@ -32,5 +32,9 @@ def post_json(
             return json.loads(raw) if raw else None
     except error.HTTPError as exc:
         raw = exc.read().decode("utf-8")
-        setattr(exc, "response_json", json.loads(raw) if raw else {})
+        try:
+            response_json = json.loads(raw) if raw else {}
+        except json.JSONDecodeError:
+            response_json = {"detail": raw[:500] if raw else ""}
+        setattr(exc, "response_json", response_json)
         raise
