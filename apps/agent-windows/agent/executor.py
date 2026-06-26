@@ -215,5 +215,9 @@ def execute_windows_job(
     code, output = _run_powershell_step(_WUA_INSTALL_SCRIPT, timeout=timeout)
     reboot_required = _parse_wua_reboot(output or "")
     if code == 0:
+        # Quando WUA_FOUND:0 (patches ja instalados pelo WSUS/auto-download), o script
+        # nao emite WUA_REBOOT. Verifica o registry para detectar reboot pendente.
+        if not reboot_required:
+            reboot_required = _is_reboot_required()
         return "applied", output or "Atualizacoes Windows instaladas via WUA COM API.", reboot_required
     return "failed", output or "Falha ao instalar atualizacoes Windows via WUA COM API.", reboot_required
