@@ -18,12 +18,16 @@ O foco atual e deixar a solucao confiavel para homologacao real e demonstracao c
 
 ## Repositorios e caminhos usados pelo usuario
 
-- GitHub: `https://github.com/leonunesm33/patch-manager.git`
-- Windows/local: `D:\Patch Manager`
-- WSL/runtime: `~/patch-manager`
-- Servidor POC: `/opt/patch-manager` (Ubuntu 24.04 remoto, git inicializado via `git init` + `git reset --hard origin/main`)
+| Ambiente | Caminho | Papel |
+|---|---|---|
+| WSL Ubuntu-24.04 | `~/projetos/patch-manager` | **PRIMARIO** — commits, build, Docker |
+| GitHub | `https://github.com/leonunesm33/patch-manager.git` | origem remota |
+| Windows Disco D | `D:\Patch Manager` | espelho de leitura / build do exe Windows |
+| Servidor POC | `/opt/patch-manager` | Ubuntu 24.04 remoto, demo/homologacao |
 
-O usuario costuma editar no Cursor em `D:\Patch Manager`, mas o runtime mais estavel para dependencias e Docker e o WSL. Ao finalizar uma etapa, sincronize GitHub, Disco D e WSL.
+**Regra de trabalho**: todos os commits e operacoes Docker partem do WSL (`~/projetos/patch-manager`).
+O Disco D e um espelho que faz `git pull` apos o push do WSL. A excecao e o build do exe Windows
+(`PatchManagerAgentWindows.exe`), que exige Python/pywin32 no Windows e deve ser feito em `D:\Patch Manager`.
 
 Para atualizar o servidor POC apos um commit:
 
@@ -51,7 +55,7 @@ O container `web` compila o React em tempo de build — sem rebuild, o frontend 
 No WSL:
 
 ```bash
-cd ~/patch-manager/infra/compose
+cd ~/projetos/patch-manager/infra/compose
 sudo docker compose up -d
 ```
 
@@ -75,7 +79,7 @@ API:
 Se faltar arquivo de ambiente:
 
 ```bash
-cd ~/patch-manager
+cd ~/projetos/patch-manager
 mkdir -p infra/env
 cp infra/env/api.env.example infra/env/api.env
 ```
@@ -87,14 +91,14 @@ Depois ajuste segredos em `infra/env/api.env`.
 Frontend:
 
 ```bash
-cd ~/patch-manager/apps/web
+cd ~/projetos/patch-manager/apps/web
 npm run build
 ```
 
 API:
 
 ```bash
-cd ~/patch-manager/apps/api
+cd ~/projetos/patch-manager/apps/api
 source .venv/bin/activate
 python -m compileall app
 alembic upgrade head
@@ -103,7 +107,7 @@ alembic upgrade head
 Compose:
 
 ```bash
-cd ~/patch-manager/infra/compose
+cd ~/projetos/patch-manager/infra/compose
 sudo docker compose ps
 sudo docker compose logs --tail=120 api
 sudo docker compose logs --tail=120 web
@@ -113,7 +117,7 @@ sudo docker compose logs --tail=120 gateway
 Smoke test:
 
 ```bash
-cd ~/patch-manager
+cd ~/projetos/patch-manager
 export PATCH_MANAGER_PASSWORD='<senha-do-admin>'
 deploy/central/smoke-test.sh
 ```
@@ -164,13 +168,25 @@ Flags importantes do agente Windows:
 - `PATCH_MANAGER_SIMULATE_WINDOWS_HOST_REBOOT=true` para teste seguro
 - `PATCH_MANAGER_SIMULATE_WINDOWS_HOST_REBOOT=false` somente para reboot real autorizado
 
-Build do exe (requer pywin32 instalado):
+Build do exe (requer pywin32 instalado — rodar no Windows, nao no WSL):
 
 ```powershell
 py -3 -m pip install pywin32 pyinstaller
-cd "D:\Patch Manager\apps\agent-windows\deploy"
-.\build-standalone-exe.ps1
+cd "D:\Patch Manager\apps\agent-windows"
+py -3 -m PyInstaller --noconfirm --distpath dist deploy\patch-manager-agent-windows.spec
 ```
+
+Apos o build, commitar o exe pelo Windows (ou copiar para o WSL e commitar de la):
+
+```powershell
+cd "D:\Patch Manager"
+git add apps/agent-windows/dist/PatchManagerAgentWindows.exe
+git commit -m "Build: rebuild exe do agente Windows"
+git push origin main
+```
+
+O exe e rastreado no git (`!apps/agent-windows/dist/PatchManagerAgentWindows.exe` no .gitignore)
+para que o servidor POC possa servi-lo via `/api/v1/agents/install/windows-agent.exe`.
 
 ## Fluxos implementados recentemente
 
@@ -207,27 +223,34 @@ cd "D:\Patch Manager\apps\agent-windows\deploy"
 
 ## Sincronizacao esperada
 
-Ao terminar uma etapa:
+O fluxo padrao parte do WSL:
 
 ```bash
+# No WSL (repositorio primario)
+cd ~/projetos/patch-manager
 git status --short
 git add .
 git commit -m "<mensagem objetiva>"
 git push origin main
 ```
 
-Depois alinhe o espelho que nao recebeu o commit diretamente:
-
-```bash
-cd ~/patch-manager
-git fetch origin
-git pull --ff-only
-```
-
-Se estiver no Windows:
+Depois alinhar o espelho Windows (Disco D):
 
 ```powershell
+# No Windows / PowerShell
 cd "D:\Patch Manager"
 git fetch origin
 git pull --ff-only
 ```
+
+E o servidor POC:
+
+```bash
+cd /opt/patch-manager
+sudo git pull --ff-only
+cd infra/compose
+sudo docker compose up -d --build api web  # somente se houver mudancas em apps/api ou apps/web
+```
+
+**Excecao — build do exe Windows**: commitar pelo Windows diretamente (Python/pywin32 nao estao no WSL).
+Apos o push do Windows, o WSL sincroniza com `git pull --ff-only`.
