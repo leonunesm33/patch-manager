@@ -1472,7 +1472,9 @@ def claim_job_for_agent(
         return None
     repository = PatchJobRepository(db)
     machine_repository = MachineRepository(db)
-    job = repository.get_next_pending_for_platform(payload.platform)
+    # machine_id e derivado deterministicamente do agent_id (mesmo padrao do inventario)
+    machine_id = f"agent-{payload.agent_id}"
+    job = repository.get_next_pending_for_agent(payload.platform, machine_id)
     if job is None:
         return None
 

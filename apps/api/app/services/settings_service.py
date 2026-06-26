@@ -197,8 +197,8 @@ class SettingsService:
     def get_windows_scan_apply_enabled(self) -> bool:
         setting = self.repository.get(self.WINDOWS_SCAN_APPLY_ENABLED_KEY)
         if setting is None:
-            self.repository.upsert(self.WINDOWS_SCAN_APPLY_ENABLED_KEY, "false")
-            return False
+            self.repository.upsert(self.WINDOWS_SCAN_APPLY_ENABLED_KEY, "true")
+            return True
         return setting.value.strip().lower() in {"1", "true", "yes", "on"}
 
     def set_windows_scan_apply_enabled(self, enabled: bool) -> bool:
@@ -209,8 +209,8 @@ class SettingsService:
     def get_windows_download_install_enabled(self) -> bool:
         setting = self.repository.get(self.WINDOWS_DOWNLOAD_INSTALL_ENABLED_KEY)
         if setting is None:
-            self.repository.upsert(self.WINDOWS_DOWNLOAD_INSTALL_ENABLED_KEY, "false")
-            return False
+            self.repository.upsert(self.WINDOWS_DOWNLOAD_INSTALL_ENABLED_KEY, "true")
+            return True
         return setting.value.strip().lower() in {"1", "true", "yes", "on"}
 
     def set_windows_download_install_enabled(self, enabled: bool) -> bool:
@@ -221,12 +221,12 @@ class SettingsService:
     def get_windows_command_timeout_seconds(self) -> int:
         setting = self.repository.get(self.WINDOWS_COMMAND_TIMEOUT_KEY)
         if setting is None:
-            self.repository.upsert(self.WINDOWS_COMMAND_TIMEOUT_KEY, "60")
-            return 60
+            self.repository.upsert(self.WINDOWS_COMMAND_TIMEOUT_KEY, "1800")
+            return 1800
         try:
             return max(int(setting.value), 15)
         except ValueError:
-            return 60
+            return 1800
 
     def set_windows_command_timeout_seconds(self, timeout_seconds: int) -> int:
         normalized = max(timeout_seconds, 15)

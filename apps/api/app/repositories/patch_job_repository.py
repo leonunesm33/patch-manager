@@ -40,13 +40,16 @@ class PatchJobRepository:
         )
         return list(self.session.scalars(statement))
 
-    def get_next_pending_for_platform(self, platform: str) -> PatchJobModel | None:
+    def get_next_pending_for_agent(self, platform: str, machine_id: str) -> PatchJobModel | None:
+        """Retorna o proximo job pendente para a maquina especifica do agente.
+        Filtragem por machine_id previne que um agente reivindique jobs de outra maquina."""
         platform_normalized = platform.lower()
         statement = (
             select(PatchJobModel)
             .where(
                 PatchJobModel.status == "pending",
                 PatchJobModel.claimed_by_agent.is_(None),
+                PatchJobModel.machine_id == machine_id,
             )
             .order_by(PatchJobModel.created_at.asc())
         )
