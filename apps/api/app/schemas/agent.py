@@ -96,9 +96,9 @@ class AgentJobResponse(BaseModel):
     allow_security_only: bool = False
     allowed_package_patterns: list[str] = []
     apt_apply_timeout_seconds: int = 900
-    windows_scan_apply_enabled: bool = False
-    windows_download_install_enabled: bool = False
-    windows_command_timeout_seconds: int = 60
+    windows_scan_apply_enabled: bool = True
+    windows_download_install_enabled: bool = True
+    windows_command_timeout_seconds: int = 1800
     reboot_policy: str = "manual"
     reboot_grace_minutes: int = 60
     status: str
