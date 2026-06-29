@@ -35,6 +35,7 @@ from app.repositories.execution_log_repository import ExecutionLogRepository
 from app.repositories.patch_job_repository import PatchJobRepository
 from app.repositories.machine_repository import MachineRepository
 from app.repositories.patch_repository import PatchRepository
+from app.repositories.schedule_repository import ScheduleRepository
 from app.schemas.agent import (
     AgentCommandPollRequest,
     AgentCommandHistoryItem,
@@ -1486,6 +1487,26 @@ def claim_job_for_agent(
     agent_registry_service.heartbeat(payload.agent_id, payload.platform, payload.agent_id)
     settings_service = SettingsService(db)
     machine = machine_repository.get_by_id(job.machine_id)
+
+    # Respeitar a política de reboot do agendamento. O schedule armazena o valor
+    # como label em português (ex.: "Nao reiniciar"). Se o schedule proíbe reboot,
+    # enviamos "manual" ao agente para evitar reinicializações não autorizadas,
+    # independentemente da configuração global.
+    schedule = ScheduleRepository(db).get_by_id(job.schedule_id)
+    schedule_rp = (schedule.reboot_policy or "").lower() if schedule else ""
+    schedule_prevents_reboot = "nao" in schedule_rp or "não" in schedule_rp
+
+    is_linux = payload.platform.lower() == "linux"
+    effective_reboot_policy = (
+        "manual"
+        if schedule_prevents_reboot
+        else (
+            settings_service.get_linux_reboot_policy()
+            if is_linux
+            else settings_service.get_windows_reboot_policy()
+        )
+    )
+
     return AgentJobResponse(
         id=job.id,
         schedule_name=job.schedule_name,
@@ -1495,7 +1516,7 @@ def claim_job_for_agent(
         platform=job.platform,
         severity=job.severity,
         execution_mode=settings_service.resolve_linux_execution_mode(machine.group if machine else None)
-        if payload.platform.lower() == "linux"
+        if is_linux
         else "apply",
         real_apply_enabled=settings_service.get_linux_real_apply_enabled(),
         allow_security_only=settings_service.get_linux_allow_security_only(),
@@ -1504,14 +1525,10 @@ def claim_job_for_agent(
         windows_scan_apply_enabled=settings_service.get_windows_scan_apply_enabled(),
         windows_download_install_enabled=settings_service.get_windows_download_install_enabled(),
         windows_command_timeout_seconds=settings_service.get_windows_command_timeout_seconds(),
-        reboot_policy=(
-            settings_service.get_linux_reboot_policy()
-            if payload.platform.lower() == "linux"
-            else settings_service.get_windows_reboot_policy()
-        ),
+        reboot_policy=effective_reboot_policy,
         reboot_grace_minutes=(
             settings_service.get_linux_reboot_grace_minutes()
-            if payload.platform.lower() == "linux"
+            if is_linux
             else settings_service.get_windows_reboot_grace_minutes()
         ),
         status=job.status,
