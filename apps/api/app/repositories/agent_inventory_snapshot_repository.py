@@ -71,7 +71,7 @@ class AgentInventorySnapshotRepository:
         if existing is None:
             return None
         existing.post_patch_state = post_patch_state
-        existing.post_patch_message = post_patch_message
+        existing.post_patch_message = post_patch_message[:4000] if post_patch_message else post_patch_message
         existing.last_apply_result = last_apply_result
         existing.last_apply_at = last_apply_at
         existing.reboot_scheduled_at = reboot_scheduled_at
