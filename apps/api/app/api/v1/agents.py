@@ -1668,7 +1668,7 @@ def submit_agent_job_result(
                 platform=job.platform,
                 severity=job.severity if patch is None else patch.severity,
                 result=result,
-                duration_seconds=120,
+                duration_seconds=int((datetime.now(UTC) - job.started_at).total_seconds()) if job.started_at else 0,
                 executed_at=datetime.now(UTC),
             )
         ]

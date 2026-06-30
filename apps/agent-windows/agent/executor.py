@@ -126,6 +126,10 @@ $ErrorActionPreference = 'Stop'
 try {
     $session = New-Object -ComObject Microsoft.Update.Session
     $searcher = $session.CreateUpdateSearcher()
+    # ServerSelection=2 (ssWindowsUpdate) usa Windows Update/Microsoft Update diretamente,
+    # ignorando qualquer servidor WSUS/SCCM configurado via GPO. Necessario para o PM
+    # operar de forma independente do WSUS.
+    $searcher.ServerSelection = 2
     $searchResult = $searcher.Search("IsInstalled=0 and IsHidden=0")
     $count = $searchResult.Updates.Count
     Write-Output "WUA_FOUND:$count"
@@ -215,7 +219,7 @@ def execute_windows_job(
     code, output = _run_powershell_step(_WUA_INSTALL_SCRIPT, timeout=timeout)
     reboot_required = _parse_wua_reboot(output or "")
     if code == 0:
-        # Quando WUA_FOUND:0 (patches ja instalados pelo WSUS/auto-download), o script
+        # Quando WUA_FOUND:0 (patches ja instalados previamente), o script
         # nao emite WUA_REBOOT. Verifica o registry para detectar reboot pendente.
         if not reboot_required:
             reboot_required = _is_reboot_required()
