@@ -229,36 +229,6 @@ def execute_patch_job_with_mode(
         if code != 0:
             return "failed", output or f"Unable to apply upgrade for package {package_name}", False
 
-        # Verify the package was actually upgraded; apt-get install exits 0 but skips packages
-        # that need dist-upgrade (held-back due to dependency chain changes, e.g. util-linux).
-        if _check_upgrade_needed(package_name):
-            code2, output2 = _run(
-                [
-                    "sudo",
-                    "apt-get",
-                    "-o",
-                    "Dpkg::Options::=--force-confold",
-                    "-y",
-                    "dist-upgrade",
-                ],
-                timeout=apt_apply_timeout_seconds,
-            )
-            if code2 != 0:
-                return (
-                    "failed",
-                    f"apt-get install skipped {package_name} (dist-upgrade required); "
-                    f"dist-upgrade also failed: {output2 or '(no output)'}",
-                    False,
-                )
-            if _check_upgrade_needed(package_name):
-                return (
-                    "failed",
-                    f"apt-get dist-upgrade exited 0 but {package_name} still shows a pending "
-                    f"upgrade. Output: {output2 or '(no output)'}",
-                    False,
-                )
-            return "applied", f"[dist-upgrade] {package_name} instalado via dist-upgrade.\n{output2}".strip(), _is_reboot_required()
-
         return "applied", output or None, _is_reboot_required()
 
     code, output = _run(["apt-cache", "policy", package_name])

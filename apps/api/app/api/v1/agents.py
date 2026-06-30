@@ -171,11 +171,11 @@ def _sync_inventory_patches(
         patch_repository.update(patch)
 
     for stale_patch in patch_repository.list_by_target(target):
-        if stale_patch.id not in expected_patch_ids and stale_patch.approval_status == "pending":
-            # Patch nao aprovado sumiu do inventario — remove com seguranca.
-            # "approved" e "rejected" sao preservados: o operador tomou uma decisao deliberada.
-            # Patches aprovados podem sumir temporariamente do inventario quando o Windows Update
-            # os processa em background apos um scan — deletar causaria perda silenciosa da aprovacao.
+        if stale_patch.id not in expected_patch_ids:
+            # Patch sumiu do inventario — pacote foi instalado ou nao e mais elegivel.
+            # Removemos independente do approval_status: o historico de execucao fica
+            # no ExecutionLog e nos jobs concluidos. Se o pacote voltar a precisar de
+            # atualizacao, o proximo inventario recriaras o patch como "pending".
             patch_repository.delete(stale_patch)
 
 
@@ -1673,6 +1673,12 @@ def submit_agent_job_result(
             )
         ]
     )
+
+    if result == "applied" and patch is not None:
+        # Patch instalado com sucesso — remove do catalogo de aprovacoes.
+        # O historico fica no ExecutionLog e no job concluido.
+        # Proximo inventario reinsere se o pacote voltar a precisar de atualizacao.
+        patch_repository.delete(patch)
 
     execution_mode = (payload.execution_mode or "").strip().lower()
     if job.platform.lower() == "linux" and execution_mode == "apply":
