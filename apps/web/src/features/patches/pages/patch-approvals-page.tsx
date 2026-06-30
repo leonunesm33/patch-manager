@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   approvePatch,
+  bulkApprovePatch,
+  bulkRejectPatch,
   createPatch,
   deletePatch,
   fetchPatchApprovals,
@@ -89,6 +91,11 @@ export function PatchApprovalsPage() {
     release_date: new Date().toISOString().slice(0, 10),
   });
 
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkActing, setIsBulkActing] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+
   function resetPatchForm() {
     setEditingId(null);
     setShowPatchForm(false);
@@ -130,6 +137,12 @@ export function PatchApprovalsPage() {
       .catch(() => { /* executions são complementares, falha silenciosa */ });
     return () => { active = false; };
   }, []);
+
+  // Reset selection when filters change
+  useEffect(() => {
+    setSelectedIds(new Set());
+    setBulkError(null);
+  }, [approvalStatusFilter, severityFilter, categoryFilter, platformFilter, machineNameFilter, machineIdFilter]);
 
   function clearFilters() {
     setSearchParams({});
@@ -197,6 +210,67 @@ export function PatchApprovalsPage() {
   const hasActiveFilters = Boolean(
     machineIdFilter || approvalStatusFilter || severityFilter || categoryFilter || platformFilter || machineNameFilter,
   );
+
+  // Derived bulk selection state
+  const pageIds = displayPagination.pageItems.map((p) => p.id);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+  const somePageSelected = pageIds.some((id) => selectedIds.has(id)) && !allPageSelected;
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectPage() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      pageIds.forEach((id) => next.add(id));
+      return next;
+    });
+  }
+
+  function selectAll() {
+    setSelectedIds(new Set(filteredPatches.map((p) => p.id)));
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+    setBulkError(null);
+  }
+
+  function togglePageSelection() {
+    if (allPageSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        pageIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      selectPage();
+    }
+  }
+
+  async function handleBulkDecision(decision: "approved" | "rejected") {
+    setBulkError(null);
+    setIsBulkActing(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const updated = decision === "approved"
+        ? await bulkApprovePatch(ids)
+        : await bulkRejectPatch(ids);
+      const updatedMap = new Map(updated.map((p) => [p.id, p]));
+      setPatches((current) => current.map((p) => updatedMap.get(p.id) ?? p));
+      setSelectedIds(new Set());
+    } catch (err) {
+      setBulkError(err instanceof Error ? err.message : "Falha ao aplicar acao em massa.");
+    } finally {
+      setIsBulkActing(false);
+    }
+  }
 
   async function handlePatchDecision(
     patchId: string,
@@ -280,7 +354,7 @@ export function PatchApprovalsPage() {
     if (!loading && items.length === 0) {
       return (
         <tr>
-          <td colSpan={8} className="muted">
+          <td colSpan={9} className="muted">
             {emptyMessage}
           </td>
         </tr>
@@ -288,7 +362,18 @@ export function PatchApprovalsPage() {
     }
 
     return items.map((patch) => (
-      <tr key={patch.id}>
+      <tr
+        key={patch.id}
+        style={selectedIds.has(patch.id) ? { background: "rgba(96, 165, 250, 0.07)" } : undefined}
+      >
+        <td style={{ width: 36, textAlign: "center", paddingRight: 0 }}>
+          <input
+            type="checkbox"
+            checked={selectedIds.has(patch.id)}
+            onChange={() => toggleSelect(patch.id)}
+            style={{ cursor: "pointer", accentColor: "var(--color-primary, #60a5fa)" }}
+          />
+        </td>
         <td>
           <div style={{ fontWeight: 700 }}>{patch.display_name || patch.id}</div>
           <div className="muted" style={{ marginTop: 4 }}>
@@ -352,6 +437,39 @@ export function PatchApprovalsPage() {
       <table className="table">
         <thead>
           <tr>
+            <th style={{ width: 36, paddingRight: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <input
+                  type="checkbox"
+                  checked={allPageSelected}
+                  ref={(el) => { if (el) el.indeterminate = somePageSelected; }}
+                  onChange={togglePageSelection}
+                  style={{ cursor: "pointer", accentColor: "var(--color-primary, #60a5fa)" }}
+                />
+                <select
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value === "page") selectPage();
+                    else if (e.target.value === "all") selectAll();
+                  }}
+                  style={{
+                    fontSize: 11,
+                    padding: "1px 0",
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "inherit",
+                    opacity: 0.6,
+                    width: 18,
+                  }}
+                  title="Selecionar em massa"
+                >
+                  <option value="">▾</option>
+                  <option value="page">Todos por pagina ({pageIds.length})</option>
+                  <option value="all">Total ({filteredPatches.length})</option>
+                </select>
+              </div>
+            </th>
             <th>Patch</th>
             <th>Categoria</th>
             <th>Criticidade</th>
@@ -529,6 +647,44 @@ export function PatchApprovalsPage() {
             {actionError}
           </p>
         ) : null}
+
+        {selectedIds.size > 0 ? (
+          <div
+            className="subtle-filter-panel"
+            style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}
+          >
+            <span style={{ fontWeight: 600 }}>
+              {selectedIds.size} selecionado{selectedIds.size !== 1 ? "s" : ""}
+              {selectedIds.size === filteredPatches.length && filteredPatches.length > 0 ? (
+                <span className="muted"> — todos os resultados filtrados</span>
+              ) : null}
+            </span>
+            <button
+              className="btn btn-primary btn-primary-uniform"
+              onClick={() => void handleBulkDecision("approved")}
+              disabled={isBulkActing}
+              type="button"
+            >
+              {isBulkActing ? "Aplicando..." : "Aprovar selecionados"}
+            </button>
+            <button
+              className="btn"
+              style={{ color: "#ff9fb0" }}
+              onClick={() => void handleBulkDecision("rejected")}
+              disabled={isBulkActing}
+              type="button"
+            >
+              Rejeitar selecionados
+            </button>
+            <button className="btn" onClick={clearSelection} disabled={isBulkActing} type="button">
+              Cancelar selecao
+            </button>
+            {bulkError ? (
+              <span style={{ color: "#ff9fb0", fontSize: 13 }}>{bulkError}</span>
+            ) : null}
+          </div>
+        ) : null}
+
         {renderPatchTable(
           displayPagination.pageItems,
           machineIdFilter

@@ -11,7 +11,7 @@ from app.models.patch import PatchModel
 from app.repositories.machine_repository import MachineRepository
 from app.repositories.patch_repository import PatchRepository
 from app.schemas.auth import UserResponse
-from app.schemas.patch import PatchAffectedMachine, PatchApproval, PatchCreate
+from app.schemas.patch import PatchAffectedMachine, PatchApproval, PatchBulkAction, PatchCreate
 
 router = APIRouter()
 
@@ -140,6 +140,46 @@ def create_patch(
         )
     )
     return _patch_response(patch, MachineRepository(db).list_all())
+
+
+@router.post("/bulk-approve", response_model=list[PatchApproval])
+def bulk_approve_patches(
+    payload: PatchBulkAction,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserResponse, Depends(require_operator)],
+) -> list[PatchApproval]:
+    repository = PatchRepository(db)
+    machines = MachineRepository(db).list_all()
+    results = []
+    for patch_id in payload.patch_ids:
+        patch = repository.get_by_id(patch_id)
+        if patch is None:
+            continue
+        patch.approval_status = "approved"
+        patch.reviewed_by = current_user.username
+        patch.reviewed_at = datetime.now(UTC)
+        results.append(_patch_response(repository.update(patch), machines))
+    return results
+
+
+@router.post("/bulk-reject", response_model=list[PatchApproval])
+def bulk_reject_patches(
+    payload: PatchBulkAction,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserResponse, Depends(require_operator)],
+) -> list[PatchApproval]:
+    repository = PatchRepository(db)
+    machines = MachineRepository(db).list_all()
+    results = []
+    for patch_id in payload.patch_ids:
+        patch = repository.get_by_id(patch_id)
+        if patch is None:
+            continue
+        patch.approval_status = "rejected"
+        patch.reviewed_by = current_user.username
+        patch.reviewed_at = datetime.now(UTC)
+        results.append(_patch_response(repository.update(patch), machines))
+    return results
 
 
 @router.put("/{patch_id}", response_model=PatchApproval)

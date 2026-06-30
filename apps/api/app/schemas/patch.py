@@ -38,3 +38,7 @@ class PatchCreate(BaseModel):
     category: str = "security"
     machines: int
     release_date: date
+
+
+class PatchBulkAction(BaseModel):
+    patch_ids: list[str]

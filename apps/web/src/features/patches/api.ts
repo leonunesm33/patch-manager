@@ -40,3 +40,17 @@ export function deletePatch(patchId: string) {
     method: "DELETE",
   });
 }
+
+export function bulkApprovePatch(patchIds: string[]) {
+  return http<PatchApproval[]>("/patches/bulk-approve", {
+    method: "POST",
+    body: JSON.stringify({ patch_ids: patchIds }),
+  });
+}
+
+export function bulkRejectPatch(patchIds: string[]) {
+  return http<PatchApproval[]>("/patches/bulk-reject", {
+    method: "POST",
+    body: JSON.stringify({ patch_ids: patchIds }),
+  });
+}
