@@ -30,6 +30,35 @@ function getFailureReasonLabel(reason: PatchJobItem["failure_reason"]) {
   }
 }
 
+const ERROR_PREVIEW_LEN = 80;
+
+function ErrorCell({ message, onExpand }: { message: string; onExpand: () => void }) {
+  if (message.length <= ERROR_PREVIEW_LEN) {
+    return <span>{message}</span>;
+  }
+  return (
+    <span>
+      {message.slice(0, ERROR_PREVIEW_LEN).trimEnd()}…{" "}
+      <button
+        type="button"
+        onClick={onExpand}
+        style={{
+          background: "none",
+          border: "none",
+          padding: 0,
+          cursor: "pointer",
+          fontSize: "inherit",
+          textDecoration: "underline",
+          color: "inherit",
+          opacity: 0.75,
+        }}
+      >
+        ver tudo
+      </button>
+    </span>
+  );
+}
+
 function escapeCsv(value: unknown) {
   const normalized = String(value ?? "");
   return `"${normalized.replace(/"/g, '""')}"`;
@@ -50,6 +79,7 @@ export function ReportsPage() {
   const [error, setError] = useState<string | null>(null);
   const [exportingFormat, setExportingFormat] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [errorDetail, setErrorDetail] = useState<PatchJobItem | null>(null);
 
   const CATEGORY_OPTIONS = [
     { value: "security", label: "Seguranca" },
@@ -275,6 +305,7 @@ export function ReportsPage() {
   }
 
   return (
+    <>
     <div className="single-panel-grid">
       <section className="panel section">
         <div className="section-header">
@@ -464,16 +495,20 @@ export function ReportsPage() {
                 <td>
                   <StatusBadge variant={getJobVariant(job.status)}>{job.status}</StatusBadge>
                 </td>
-                <td className="muted">
+                <td className="muted" style={{ maxWidth: 260 }}>
                   {job.failure_reason ? (
                     <div style={{ display: "grid", gap: 6 }}>
                       <StatusBadge variant="warn">
                         {getFailureReasonLabel(job.failure_reason) ?? "guardrail"}
                       </StatusBadge>
-                      <span>{job.error_message ?? "-"}</span>
+                      {job.error_message ? (
+                        <ErrorCell message={job.error_message} onExpand={() => setErrorDetail(job)} />
+                      ) : null}
                     </div>
+                  ) : job.error_message ? (
+                    <ErrorCell message={job.error_message} onExpand={() => setErrorDetail(job)} />
                   ) : (
-                    job.error_message ?? "-"
+                    "-"
                   )}
                 </td>
               </tr>
@@ -544,5 +579,55 @@ export function ReportsPage() {
         />
       </section>
     </div>
+
+    {errorDetail !== null ? (
+      <div
+        className="modal-backdrop"
+        role="dialog"
+        aria-modal="true"
+        onClick={() => setErrorDetail(null)}
+      >
+        <div
+          className="modal-card"
+          style={{ maxWidth: 640, width: "90vw" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p className="eyebrow">
+            {errorDetail.machine_name} · {errorDetail.patch_id}
+          </p>
+          <h3 className="modal-title">Detalhe do erro</h3>
+          {errorDetail.failure_reason ? (
+            <div style={{ marginBottom: 12 }}>
+              <StatusBadge variant="warn">
+                {getFailureReasonLabel(errorDetail.failure_reason) ?? "guardrail"}
+              </StatusBadge>
+            </div>
+          ) : null}
+          <pre
+            style={{
+              background: "var(--surface-alt, #f0f0f0)",
+              borderRadius: 6,
+              padding: "12px 14px",
+              fontSize: 12,
+              lineHeight: 1.6,
+              overflowX: "auto",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              maxHeight: 340,
+              overflowY: "auto",
+              margin: 0,
+            }}
+          >
+            {errorDetail.error_message ?? "Sem detalhes disponíveis."}
+          </pre>
+          <div className="modal-actions">
+            <button className="btn" type="button" onClick={() => setErrorDetail(null)}>
+              Fechar
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
+    </>
   );
 }
