@@ -7,6 +7,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-patchmanager}
       POSTGRES_USER: ${POSTGRES_USER:-patchmanager}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: America/Sao_Paulo
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -19,6 +20,8 @@ services:
     image: redis:7
     container_name: patch-manager-redis
     restart: always
+    environment:
+      TZ: America/Sao_Paulo
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis_data:/data
@@ -36,6 +39,8 @@ services:
     restart: always
     ports:
       - "${PATCH_MANAGER_API_PORT:-8000}:8000"
+    environment:
+      TZ: America/Sao_Paulo
     env_file:
       - ../env/api.env
     depends_on:
@@ -54,6 +59,8 @@ services:
       context: ../../apps/web
     container_name: patch-manager-web
     restart: always
+    environment:
+      TZ: America/Sao_Paulo
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
       interval: 15s
@@ -64,6 +71,8 @@ services:
     image: nginx:1.27-alpine
     container_name: patch-manager-gateway
     restart: always
+    environment:
+      TZ: America/Sao_Paulo
     depends_on:
       api:
         condition: service_healthy

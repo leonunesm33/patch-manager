@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from threading import Lock
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -86,7 +86,7 @@ class SchedulerService:
         try:
             service = PatchCycleService(session)
             result = service.enqueue_jobs()
-            self._last_enqueue_run_at = datetime.utcnow()
+            self._last_enqueue_run_at = datetime.now(UTC)
             self._last_enqueue_result = result
             return result
         finally:
@@ -97,7 +97,7 @@ class SchedulerService:
         try:
             service = PatchCycleService(session)
             result = service.process_pending_jobs()
-            self._last_worker_run_at = datetime.utcnow()
+            self._last_worker_run_at = datetime.now(UTC)
             self._last_worker_result = result
             return result
         finally:
