@@ -214,6 +214,10 @@ def execute_patch_job_with_mode(
         if allow_security_only and not _has_security_candidate(package_name):
             return "failed", f"Package {package_name} does not have a security-tagged upgrade candidate.", False
 
+        # Refresh apt index before installing to avoid stale mirror 404s.
+        # Non-fatal: if the update fails we still attempt the install with the cached index.
+        _run(["sudo", "apt-get", "update", "-qq"], timeout=120)
+
         code, output = _run(
             [
                 "sudo",

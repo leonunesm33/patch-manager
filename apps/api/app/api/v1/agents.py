@@ -85,7 +85,7 @@ def _classify_job_failure(error_message: str | None) -> str | None:
         return "guardrail_package_not_allowed"
     if "is not currently upgradable" in normalized:
         return "guardrail_not_upgradable"
-    if "does not have a security-tagged candidate" in normalized:
+    if "does not have a security-tagged" in normalized:
         return "guardrail_security_only_blocked"
     if "windows apply path is disabled" in normalized:
         return "guardrail_windows_apply_disabled"
@@ -1679,6 +1679,17 @@ def submit_agent_job_result(
         # O historico fica no ExecutionLog e no job concluido.
         # Proximo inventario reinsere se o pacote voltar a precisar de atualizacao.
         patch_repository.delete(patch)
+    elif result == "failed" and patch is not None:
+        failure_reason = _classify_job_failure(payload.error_message)
+        if failure_reason and failure_reason.startswith("guardrail_"):
+            # Falha de guardrail e permanente ate que a configuracao mude.
+            # Manter o patch "approved" faria o scheduler criar 3 novos jobs por dia
+            # para patches que nunca instalaram sob as configuracoes atuais.
+            # Revertemos para "pending" para parar o loop e alertar o operador.
+            patch.approval_status = "pending"
+            patch.reviewed_by = None
+            patch.reviewed_at = None
+            patch_repository.update(patch)
 
     execution_mode = (payload.execution_mode or "").strip().lower()
     if job.platform.lower() == "linux" and execution_mode == "apply":
