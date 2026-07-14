@@ -221,12 +221,12 @@ class SettingsService:
     def get_windows_command_timeout_seconds(self) -> int:
         setting = self.repository.get(self.WINDOWS_COMMAND_TIMEOUT_KEY)
         if setting is None:
-            self.repository.upsert(self.WINDOWS_COMMAND_TIMEOUT_KEY, "1800")
-            return 1800
+            self.repository.upsert(self.WINDOWS_COMMAND_TIMEOUT_KEY, "7200")
+            return 7200
         try:
             return max(int(setting.value), 15)
         except ValueError:
-            return 1800
+            return 7200
 
     def set_windows_command_timeout_seconds(self, timeout_seconds: int) -> int:
         normalized = max(timeout_seconds, 15)
