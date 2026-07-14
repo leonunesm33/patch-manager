@@ -1,6 +1,29 @@
+import re
 import subprocess
 
 from config import AgentConfig
+
+_GUID_RE = re.compile(
+    r"^[{]?[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}"
+    r"-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}[}]?$"
+)
+
+
+def _wua_filter_from_patch_id(patch_id: str) -> tuple[str, str, str]:
+    """Return (kb_number, update_id, title_hint) for WUA filtering.
+
+    Only one of the three values will be non-empty:
+      kb_number  — digits only, e.g. '5015877' (from 'KB5015877@...')
+      update_id  — GUID without braces (from driver/non-KB patches)
+      title_hint — last-resort substring match
+    """
+    identifier = str(patch_id).split("@", 1)[0].strip()
+    upper = identifier.upper()
+    if upper.startswith("KB") and len(upper) > 2 and upper[2:].isdigit():
+        return upper[2:], "", ""
+    if _GUID_RE.match(identifier):
+        return "", identifier.strip("{}"), ""
+    return "", "", identifier
 
 
 def _run(command: list[str], timeout: int = 20) -> tuple[int, str]:
@@ -121,24 +144,56 @@ def execute_reboot_command(
 
 
 # WUA COM API result codes: 2=Succeeded, 3=SucceededWithErrors, 4=Failed, 5=Aborted
-_WUA_INSTALL_SCRIPT = """\
+#
+# Template placeholders (replaced at runtime by _make_wua_install_script):
+#   __KB__    — KB article number digits only, e.g. '5015877', or ''
+#   __UID__   — WUA UpdateID GUID (for driver/non-KB patches), or ''
+#   __TITLE__ — title substring hint of last resort, or ''
+#
+# When UpdateID is known, the WUA search is scoped directly (efficient).
+# Otherwise all pending updates are retrieved and filtered in PowerShell.
+# Only the single approved patch is downloaded and installed.
+_WUA_INSTALL_SCRIPT_TEMPLATE = """\
 $ErrorActionPreference = 'Stop'
+$_PmKB    = '__KB__'
+$_PmUID   = '__UID__'
+$_PmTitle = '__TITLE__'
 try {
-    $session = New-Object -ComObject Microsoft.Update.Session
+    $session  = New-Object -ComObject Microsoft.Update.Session
     $searcher = $session.CreateUpdateSearcher()
     # ServerSelection=2 (ssWindowsUpdate) usa Windows Update/Microsoft Update diretamente,
     # ignorando qualquer servidor WSUS/SCCM configurado via GPO. Necessario para o PM
     # operar de forma independente do WSUS.
     $searcher.ServerSelection = 2
-    $searchResult = $searcher.Search("IsInstalled=0 and IsHidden=0")
-    $count = $searchResult.Updates.Count
+    if ($_PmUID -ne '') {
+        $searchResult = $searcher.Search("IsInstalled=0 and IsHidden=0 and UpdateID='$_PmUID'")
+    } else {
+        $searchResult = $searcher.Search('IsInstalled=0 and IsHidden=0')
+    }
+    $targetUpdates = New-Object -ComObject Microsoft.Update.UpdateColl
+    foreach ($update in $searchResult.Updates) {
+        $matched = $false
+        if ($_PmKB -ne '') {
+            foreach ($kb in $update.KBArticleIDs) {
+                if ($kb -eq $_PmKB) { $matched = $true; break }
+            }
+        } elseif ($_PmUID -ne '') {
+            $matched = $true
+        } elseif ($_PmTitle -ne '') {
+            if ($update.Title -like "*$_PmTitle*") { $matched = $true }
+        } else {
+            $matched = $true
+        }
+        if ($matched) { [void]$targetUpdates.Add($update) }
+    }
+    $count = $targetUpdates.Count
     Write-Output "WUA_FOUND:$count"
     if ($count -eq 0) { exit 0 }
     for ($i = 0; $i -lt $count; $i++) {
-        Write-Output "WUA_UPDATE:$($searchResult.Updates.Item($i).Title)"
+        Write-Output "WUA_UPDATE:$($targetUpdates.Item($i).Title)"
     }
     $downloader = $session.CreateUpdateDownloader()
-    $downloader.Updates = $searchResult.Updates
+    $downloader.Updates = $targetUpdates
     $dlResult = $downloader.Download()
     Write-Output "WUA_DOWNLOAD:$($dlResult.ResultCode)"
     if ($dlResult.ResultCode -ne 2 -and $dlResult.ResultCode -ne 3) {
@@ -146,7 +201,7 @@ try {
         exit 1
     }
     $installer = $session.CreateUpdateInstaller()
-    $installer.Updates = $searchResult.Updates
+    $installer.Updates = $targetUpdates
     $installResult = $installer.Install()
     Write-Output "WUA_INSTALL:$($installResult.ResultCode)"
     Write-Output "WUA_REBOOT:$($installResult.RebootRequired)"
@@ -158,6 +213,16 @@ try {
     exit 1
 }
 """
+
+
+def _make_wua_install_script(patch_id: str) -> str:
+    kb, uid, title = _wua_filter_from_patch_id(patch_id)
+    return (
+        _WUA_INSTALL_SCRIPT_TEMPLATE
+        .replace("__KB__", kb)
+        .replace("__UID__", uid)
+        .replace("__TITLE__", title)
+    )
 
 
 def _parse_wua_reboot(output: str) -> bool:
@@ -215,8 +280,9 @@ def execute_windows_job(
             _is_reboot_required(),
         )
 
-    # Instalacao sincrona via WUA COM API — retorna resultado real (nao fire-and-forget como UsoClient)
-    code, output = _run_powershell_step(_WUA_INSTALL_SCRIPT, timeout=timeout)
+    # Instalacao sincrona via WUA COM API — apenas o patch aprovado (filtrado por KB/UpdateID)
+    patch_id = str(job.get("patch_id", ""))
+    code, output = _run_powershell_step(_make_wua_install_script(patch_id), timeout=timeout)
     reboot_required = _parse_wua_reboot(output or "")
     if code == 0:
         # Quando WUA_FOUND:0 (patches ja instalados previamente), o script
