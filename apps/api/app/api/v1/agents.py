@@ -322,10 +322,11 @@ sudo chmod 660 "${{ENV_TARGET}}"
 sudo install -m 644 "${{INSTALL_ROOT}}/deploy/patch-manager-agent-linux.service" "${{SERVICE_TARGET}}"
 sudo chown -R patchmanager:patchmanager "${{INSTALL_ROOT}}" /var/log/patch-manager
 
-# Allow patchmanager to install packages and schedule reboots without password prompt
+# Allow patchmanager to install packages, schedule reboots and run upgrade scripts without password prompt
 sudo tee /etc/sudoers.d/patch-manager > /dev/null <<'SUDOERS_EOF'
 patchmanager ALL=(root) NOPASSWD: /usr/sbin/shutdown
 patchmanager ALL=(root) NOPASSWD: /usr/bin/apt-get
+patchmanager ALL=(root) NOPASSWD: /usr/bin/bash
 SUDOERS_EOF
 sudo chmod 440 /etc/sudoers.d/patch-manager
 sudo rm -f /etc/sudoers.d/patch-manager-shutdown
@@ -423,10 +424,11 @@ sudo chown root:patchmanager "${{ENV_TARGET}}"
 sudo chmod 660 "${{ENV_TARGET}}"
 sudo install -m 644 "${{INSTALL_ROOT}}/deploy/patch-manager-agent-linux.service" "${{SERVICE_TARGET}}"
 
-# Ensure sudoers covers both apt-get and shutdown (idempotent rewrite)
+# Ensure sudoers covers apt-get, shutdown and bash for upgrade scripts (idempotent rewrite)
 sudo tee /etc/sudoers.d/patch-manager > /dev/null <<'SUDOERS_EOF'
 patchmanager ALL=(root) NOPASSWD: /usr/sbin/shutdown
 patchmanager ALL=(root) NOPASSWD: /usr/bin/apt-get
+patchmanager ALL=(root) NOPASSWD: /usr/bin/bash
 SUDOERS_EOF
 sudo chmod 440 /etc/sudoers.d/patch-manager
 sudo rm -f /etc/sudoers.d/patch-manager-shutdown
