@@ -251,7 +251,8 @@ def main() -> None:
                 logger.info("Processing command %s of type %s", command["id"], command_type)
                 if command_type == "upgrade_agent":
                     submit_command_result(config, str(command["id"]), "applied", "Upgrade do agente iniciado.")
-                    server_url = config.server_url.rstrip("/")
+                    _parsed = urllib.parse.urlparse(config.api_base)
+                    server_url = f"{_parsed.scheme}://{_parsed.netloc}"
                     encoded_url = urllib.parse.quote(server_url, safe="")
                     upgrade_url = f"{server_url}/api/v1/agents/install/linux-upgrade.sh?server_url={encoded_url}"
                     subprocess.Popen(

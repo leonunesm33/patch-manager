@@ -2,9 +2,11 @@ import logging
 import os
 import platform
 import socket
+import subprocess
 import threading
 import sys
 import time
+import urllib.parse
 from urllib import error
 
 CURRENT_DIR = os.path.dirname(__file__)
@@ -237,15 +239,37 @@ def main(stop_event: threading.Event | None = None) -> None:
 
             command = poll_command(config)
             if command and command.get("id"):
-                logger.info("Processing command %s of type %s", command["id"], command.get("command_type"))
-                result, message = execute_reboot_command(command, config)
-                submit_command_result(config, str(command["id"]), result, message)
-                logger.info(
-                    "Finished command %s with result %s%s",
-                    command["id"],
-                    result,
-                    f" | {message}" if message else "",
-                )
+                command_type = str(command.get("command_type", "")).strip().lower()
+                logger.info("Processing command %s of type %s", command["id"], command_type)
+                if command_type == "upgrade_agent":
+                    submit_command_result(config, str(command["id"]), "applied", "Upgrade do agente iniciado.")
+                    _parsed = urllib.parse.urlparse(config.api_base)
+                    server_url = f"{_parsed.scheme}://{_parsed.netloc}"
+                    encoded_url = urllib.parse.quote(server_url, safe="")
+                    upgrade_url = f"{server_url}/api/v1/agents/install/windows-upgrade.ps1?server_url={encoded_url}"
+                    subprocess.Popen(
+                        [
+                            "powershell.exe",
+                            "-ExecutionPolicy", "Bypass",
+                            "-NoProfile",
+                            "-Command",
+                            f"Start-Sleep 3; irm '{upgrade_url}' | iex",
+                        ],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        stdin=subprocess.DEVNULL,
+                        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+                    )
+                    logger.info("Upgrade script scheduled for agent %s", config.agent_id)
+                else:
+                    result, message = execute_reboot_command(command, config)
+                    submit_command_result(config, str(command["id"]), result, message)
+                    logger.info(
+                        "Finished command %s with result %s%s",
+                        command["id"],
+                        result,
+                        f" | {message}" if message else "",
+                    )
                 continue
 
             job = claim_job(config)
