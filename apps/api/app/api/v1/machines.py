@@ -357,19 +357,30 @@ def update_machine(
 def resolve_machine_identity_conflict(
     machine_id: str,
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[UserResponse, Depends(require_operator)],
+    current_user: Annotated[UserResponse, Depends(require_operator)],
 ) -> Machine:
     repository = MachineRepository(db)
     machine = repository.get_by_id(machine_id)
     if machine is None:
         raise HTTPException(status_code=404, detail="Machine not found")
 
-    if machine.identity_conflict_fingerprint is not None:
-        machine.hardware_fingerprint = machine.identity_conflict_fingerprint
+    previous_fingerprint = machine.hardware_fingerprint
+    new_fingerprint = machine.identity_conflict_fingerprint
+    if new_fingerprint is not None:
+        machine.hardware_fingerprint = new_fingerprint
     machine.identity_conflict_fingerprint = None
     machine.identity_conflict_detected_at = None
 
     machine = repository.update(machine)
+
+    settings_service = SettingsService(db)
+    settings_service.record_operational_event(
+        "machine_identity_conflict_resolved",
+        current_user.username,
+        f"Resolveu conflito de identidade da maquina {machine.name}: "
+        f"fingerprint anterior {previous_fingerprint!r} substituido por {new_fingerprint!r}.",
+    )
+
     return Machine.model_validate(machine)
 
 

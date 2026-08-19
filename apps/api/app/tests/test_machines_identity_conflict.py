@@ -5,6 +5,10 @@ from app.main import app
 from app.models.machine import MachineModel
 
 
+class _FakeOperator:
+    username = "test-operator"
+
+
 def _seed_machine_with_conflict(db_session) -> MachineModel:
     machine = MachineModel(
         id="agent-linux-clone-01",
@@ -28,7 +32,7 @@ def _seed_machine_with_conflict(db_session) -> MachineModel:
 
 def test_resolve_identity_conflict_accepts_latest_fingerprint_as_baseline(client, db_session):
     _seed_machine_with_conflict(db_session)
-    app.dependency_overrides[require_operator] = lambda: None
+    app.dependency_overrides[require_operator] = lambda: _FakeOperator()
 
     response = client.post("/api/v1/machines/agent-linux-clone-01/resolve-identity-conflict")
 
@@ -48,7 +52,7 @@ def test_resolve_identity_conflict_accepts_latest_fingerprint_as_baseline(client
 
 
 def test_resolve_identity_conflict_404_when_machine_missing(client):
-    app.dependency_overrides[require_operator] = lambda: None
+    app.dependency_overrides[require_operator] = lambda: _FakeOperator()
 
     response = client.post("/api/v1/machines/does-not-exist/resolve-identity-conflict")
 
