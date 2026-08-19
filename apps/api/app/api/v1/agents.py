@@ -329,6 +329,7 @@ sudo chown -R patchmanager:patchmanager "${{INSTALL_ROOT}}" /var/log/patch-manag
 sudo tee /etc/sudoers.d/patch-manager > /dev/null <<'SUDOERS_EOF'
 patchmanager ALL=(root) NOPASSWD: /usr/sbin/shutdown
 patchmanager ALL=(root) NOPASSWD: /usr/bin/apt-get
+patchmanager ALL=(root) NOPASSWD: /bin/cat /sys/class/dmi/id/product_uuid
 SUDOERS_EOF
 sudo chmod 440 /etc/sudoers.d/patch-manager
 sudo rm -f /etc/sudoers.d/patch-manager-shutdown

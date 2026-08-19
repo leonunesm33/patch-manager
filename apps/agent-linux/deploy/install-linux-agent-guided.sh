@@ -150,6 +150,12 @@ sudo chmod 660 "${ENV_TARGET}"
 
 sudo install -m 644 "${INSTALL_ROOT}/deploy/${SERVICE_NAME}" "${SERVICE_TARGET}"
 sudo chown -R patchmanager:patchmanager "${INSTALL_ROOT}" /var/log/patch-manager
+
+sudo tee /etc/sudoers.d/patch-manager-fingerprint > /dev/null <<'SUDOERS_EOF'
+patchmanager ALL=(root) NOPASSWD: /bin/cat /sys/class/dmi/id/product_uuid
+SUDOERS_EOF
+sudo chmod 440 /etc/sudoers.d/patch-manager-fingerprint
+
 sudo systemctl daemon-reload
 
 echo "Instalacao concluida."

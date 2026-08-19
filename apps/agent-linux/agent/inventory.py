@@ -36,6 +36,14 @@ def _count_lines(output: str) -> int:
     return len([line for line in output.splitlines() if line.strip()])
 
 
+def _collect_hardware_fingerprint() -> str | None:
+    override = os.getenv("PATCH_MANAGER_FINGERPRINT_OVERRIDE", "").strip()
+    if override:
+        return override
+    output = _run(["sudo", "cat", "/sys/class/dmi/id/product_uuid"])
+    return output.strip() or None
+
+
 # PackageKit/Cockpit priority → severity mapping
 _APT_PRIORITY_TO_SEVERITY: dict[str, str] = {
     "required": "critical",
@@ -289,6 +297,7 @@ def collect_inventory(agent_version: str, execution_mode: str) -> dict[str, obje
     return {
         "hostname": hostname,
         "primary_ip": primary_ip,
+        "hardware_fingerprint": _collect_hardware_fingerprint(),
         "package_manager": package_manager,
         "installed_packages": installed_packages,
         "upgradable_packages": upgradable_packages,
