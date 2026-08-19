@@ -1,3 +1,4 @@
+import functools
 import json
 import os
 import platform
@@ -38,6 +39,7 @@ def _run_powershell_json(script: str) -> dict[str, object] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
+@functools.lru_cache(maxsize=1)
 def _collect_hardware_fingerprint() -> str | None:
     override = os.getenv("PATCH_MANAGER_FINGERPRINT_OVERRIDE", "").strip()
     if override:

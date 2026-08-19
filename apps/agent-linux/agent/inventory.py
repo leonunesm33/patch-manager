@@ -1,3 +1,4 @@
+import functools
 import glob
 import gzip
 import json
@@ -36,6 +37,7 @@ def _count_lines(output: str) -> int:
     return len([line for line in output.splitlines() if line.strip()])
 
 
+@functools.lru_cache(maxsize=1)
 def _collect_hardware_fingerprint() -> str | None:
     override = os.getenv("PATCH_MANAGER_FINGERPRINT_OVERRIDE", "").strip()
     if override:
