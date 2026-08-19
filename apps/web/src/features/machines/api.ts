@@ -25,6 +25,12 @@ export function updateMachine(machineId: string, payload: MachineCreate) {
   });
 }
 
+export function resolveIdentityConflict(machineId: string) {
+  return http<Machine>(`/machines/${machineId}/resolve-identity-conflict`, {
+    method: "POST",
+  });
+}
+
 export function deleteMachine(machineId: string) {
   return http<void>(`/machines/${machineId}`, {
     method: "DELETE",

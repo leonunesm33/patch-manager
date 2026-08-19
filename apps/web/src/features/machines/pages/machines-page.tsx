@@ -7,6 +7,7 @@ import {
   fetchMachineGroups,
   fetchMachineOperationalDetails,
   fetchMachines,
+  resolveIdentityConflict,
   updateMachine,
 } from "@/features/machines/api";
 import { ActionMenu } from "@/components/common/action-menu";
@@ -271,6 +272,20 @@ export function MachinesPage() {
       setTimeout(() => setUpgradeFeedback(null), 6000);
     } catch (err) {
       setUpgradeFeedback(err instanceof Error ? err.message : "Falha ao solicitar upgrade.");
+      setTimeout(() => setUpgradeFeedback(null), 6000);
+    }
+  }
+
+  async function handleResolveIdentityConflict(machine: Machine) {
+    try {
+      const updated = await resolveIdentityConflict(machine.id);
+      setMachines((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setUpgradeFeedback(`Conflito de identidade resolvido para ${machine.name}.`);
+      setTimeout(() => setUpgradeFeedback(null), 6000);
+    } catch (err) {
+      setUpgradeFeedback(
+        err instanceof Error ? err.message : "Falha ao resolver conflito de identidade.",
+      );
       setTimeout(() => setUpgradeFeedback(null), 6000);
     }
   }
@@ -785,7 +800,17 @@ export function MachinesPage() {
                     />
                   ) : null}
                 </td>
-                <td style={{ fontWeight: 700 }}>{machine.name}</td>
+                <td style={{ fontWeight: 700 }}>
+                  {machine.name}
+                  {machine.identity_conflict_detected_at ? (
+                    <span
+                      title={`Fingerprint esperado: ${machine.hardware_fingerprint ?? "?"} | visto: ${machine.identity_conflict_fingerprint ?? "?"} em ${formatDateTimeSaoPaulo(machine.identity_conflict_detected_at)}`}
+                      style={{ marginLeft: 6 }}
+                    >
+                      <StatusBadge variant="error">conflito de identidade</StatusBadge>
+                    </span>
+                  ) : null}
+                </td>
                 <td className="code">{machine.ip}</td>
                 <td>{machine.platform}</td>
                 <td>{machine.environment}</td>
@@ -849,6 +874,11 @@ export function MachinesPage() {
                         label: "Atualizar agente",
                         disabled: !machine.id.startsWith("agent-"),
                         onSelect: () => void handleUpgradeAgent(machine),
+                      },
+                      {
+                        label: "Resolver conflito de identidade",
+                        disabled: !machine.identity_conflict_detected_at,
+                        onSelect: () => void handleResolveIdentityConflict(machine),
                       },
                       {
                         label: "Editar",
