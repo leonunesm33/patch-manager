@@ -353,6 +353,26 @@ def update_machine(
     return Machine.model_validate(machine)
 
 
+@router.post("/{machine_id}/resolve-identity-conflict", response_model=Machine)
+def resolve_machine_identity_conflict(
+    machine_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[UserResponse, Depends(require_operator)],
+) -> Machine:
+    repository = MachineRepository(db)
+    machine = repository.get_by_id(machine_id)
+    if machine is None:
+        raise HTTPException(status_code=404, detail="Machine not found")
+
+    if machine.identity_conflict_fingerprint is not None:
+        machine.hardware_fingerprint = machine.identity_conflict_fingerprint
+    machine.identity_conflict_fingerprint = None
+    machine.identity_conflict_detected_at = None
+
+    machine = repository.update(machine)
+    return Machine.model_validate(machine)
+
+
 @router.delete("/{machine_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_machine(
     machine_id: str,
