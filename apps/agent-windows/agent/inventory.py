@@ -1,4 +1,5 @@
 import json
+import os
 import platform
 import socket
 import subprocess
@@ -35,6 +36,20 @@ def _run_powershell_json(script: str) -> dict[str, object] | None:
     except json.JSONDecodeError:
         return None
     return parsed if isinstance(parsed, dict) else None
+
+
+def _collect_hardware_fingerprint() -> str | None:
+    override = os.getenv("PATCH_MANAGER_FINGERPRINT_OVERRIDE", "").strip()
+    if override:
+        return override
+    data = _run_powershell_json(
+        "Get-CimInstance Win32_ComputerSystemProduct | "
+        "Select-Object @{Name='uuid';Expression={$_.UUID}} | ConvertTo-Json -Compress"
+    )
+    if data is None:
+        return None
+    value = data.get("uuid")
+    return str(value).strip() or None if value else None
 
 
 def _collect_windows_update_metrics() -> dict[str, object]:
@@ -145,6 +160,7 @@ def collect_inventory(agent_version: str, execution_mode: str) -> dict[str, obje
     return {
         "hostname": hostname,
         "primary_ip": primary_ip,
+        "hardware_fingerprint": _collect_hardware_fingerprint(),
         "package_manager": "windows-update",
         "installed_packages": windows_metrics["installed_update_count"],
         "upgradable_packages": windows_metrics["upgradable_packages"],
