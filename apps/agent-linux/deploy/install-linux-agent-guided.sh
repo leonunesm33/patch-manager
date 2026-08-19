@@ -110,9 +110,7 @@ if ! command -v rsync >/dev/null 2>&1; then
 fi
 
 if [[ -z "${AGENT_ID}" ]]; then
-  HOSTNAME_VALUE="$(hostname -s 2>/dev/null || hostname)"
-  AGENT_ID="linux-$(echo "${HOSTNAME_VALUE}" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-')"
-  AGENT_ID="${AGENT_ID%-}"
+  AGENT_ID="linux-$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen)"
 fi
 
 sudo mkdir -p "${INSTALL_ROOT}"

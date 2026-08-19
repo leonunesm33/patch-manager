@@ -283,9 +283,7 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-HOSTNAME_VALUE="$(hostname -s 2>/dev/null || hostname)"
-AGENT_ID="linux-$(echo "${{HOSTNAME_VALUE}}" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-')"
-AGENT_ID="${{AGENT_ID%-}}"
+AGENT_ID="linux-$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen)"
 
 sudo mkdir -p "${{INSTALL_ROOT}}" /etc/patch-manager /var/log/patch-manager
 
@@ -483,7 +481,7 @@ $InstallRoot = "C:\\ProgramData\\PatchManager\\agent-windows"
 $EnvTarget = "C:\\ProgramData\\PatchManager\\agent-windows.env"
 $ServiceName = "PatchManagerAgent"
 $LogFile = "C:\\ProgramData\\PatchManager\\agent-windows.log"
-$AgentId = "windows-$($env:COMPUTERNAME.ToLower() -replace '[^a-z0-9]+','-')"
+$AgentId = "windows-$([guid]::NewGuid().ToString('N'))"
 
 function Test-IsAdministrator {{
   $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
