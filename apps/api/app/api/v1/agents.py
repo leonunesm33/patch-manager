@@ -1,3 +1,4 @@
+import logging
 from hashlib import sha1
 import json
 import secrets
@@ -69,6 +70,8 @@ from app.services.agent_registry_service import agent_registry_service
 from app.services.patch_cycle_service import PatchCycleService
 from app.services.scheduler_service import scheduler_service
 from app.services.settings_service import SettingsService
+
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -1429,9 +1432,11 @@ def submit_agent_inventory(
                 pending_patches=payload.upgradable_packages,
                 last_check_in=datetime.now(UTC),
                 risk=risk,
+                hardware_fingerprint=payload.hardware_fingerprint,
             )
         )
     else:
+        machine.name = payload.hostname
         machine.ip = payload.primary_ip
         machine.platform = "Ubuntu" if payload.platform.lower() == "linux" else payload.platform.title()
         machine.environment = machine.environment or "production"
@@ -1440,6 +1445,18 @@ def submit_agent_inventory(
         machine.pending_patches = payload.upgradable_packages
         machine.last_check_in = datetime.now(UTC)
         machine.risk = risk
+        if payload.hardware_fingerprint:
+            if machine.hardware_fingerprint is None:
+                machine.hardware_fingerprint = payload.hardware_fingerprint
+            elif machine.hardware_fingerprint != payload.hardware_fingerprint:
+                machine.identity_conflict_fingerprint = payload.hardware_fingerprint
+                machine.identity_conflict_detected_at = datetime.now(UTC)
+                logger.warning(
+                    "Identity conflict detected for machine %s: expected fingerprint %s, saw %s",
+                    managed_machine_id,
+                    machine.hardware_fingerprint,
+                    payload.hardware_fingerprint,
+                )
         machine_repository.update(machine)
 
     _sync_inventory_patches(db, payload.agent_id, managed_machine_id, pending_inventory_items)

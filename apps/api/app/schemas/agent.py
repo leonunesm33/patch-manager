@@ -39,6 +39,7 @@ class AgentInventoryRequest(BaseModel):
     platform: str
     hostname: str
     primary_ip: str
+    hardware_fingerprint: str | None = None
     package_manager: str
     installed_packages: int
     upgradable_packages: int
