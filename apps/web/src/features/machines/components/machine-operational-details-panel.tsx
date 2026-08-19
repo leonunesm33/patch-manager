@@ -163,6 +163,23 @@ export function MachineOperationalDetailsPanel({
                   {details.machine.status}
                 </StatusBadge>
               </div>
+              {details.machine.identity_conflict_detected_at ? (
+                <div className="list-item">
+                  <div>
+                    <div style={{ fontWeight: 700 }}>Conflito de identidade detectado</div>
+                    <div className="muted" style={{ marginTop: 4 }}>
+                      Fingerprint esperado: {details.machine.hardware_fingerprint ?? "?"}
+                    </div>
+                    <div className="muted" style={{ marginTop: 4 }}>
+                      Fingerprint visto por ultimo: {details.machine.identity_conflict_fingerprint ?? "?"}
+                    </div>
+                    <div className="muted" style={{ marginTop: 4 }}>
+                      Detectado em: {formatDateTimeSaoPaulo(details.machine.identity_conflict_detected_at)}
+                    </div>
+                  </div>
+                  <StatusBadge variant="error">conflito de identidade</StatusBadge>
+                </div>
+              ) : null}
             </div>
 
             <div className="list">
