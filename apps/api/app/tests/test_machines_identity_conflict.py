@@ -38,6 +38,12 @@ def test_resolve_identity_conflict_accepts_latest_fingerprint_as_baseline(client
     assert body["identity_conflict_fingerprint"] is None
     assert body["identity_conflict_detected_at"] is None
 
+    db_session.expire_all()
+    reloaded = db_session.get(MachineModel, "agent-linux-clone-01")
+    assert reloaded.hardware_fingerprint == body["hardware_fingerprint"]
+    assert reloaded.identity_conflict_fingerprint == body["identity_conflict_fingerprint"]
+    assert reloaded.identity_conflict_detected_at == body["identity_conflict_detected_at"]
+
     del app.dependency_overrides[require_operator]
 
 
