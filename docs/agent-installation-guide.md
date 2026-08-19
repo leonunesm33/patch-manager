@@ -56,3 +56,7 @@ PATCH_MANAGER_SIMULATE_HOST_REBOOT=true
 ```
 
 Somente desative simulacao em hosts de homologacao preparados e depois de confirmar com o operador.
+
+## Reinstalacao
+
+Reinstalar o agente em um host ja enrollado gera um novo Agent ID (UUID aleatorio, nao mais derivado do hostname), entao o host aparecera no painel como um novo enrollment pendente em vez de reaproveitar o registro existente. O operador deve remover manualmente o registro antigo (orfao) dessa maquina no painel apos aprovar o novo enrollment.

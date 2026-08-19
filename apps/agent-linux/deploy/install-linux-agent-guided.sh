@@ -159,6 +159,7 @@ sudo systemctl daemon-reload
 echo "Instalacao concluida."
 echo "Arquivo de ambiente gerado em ${ENV_TARGET}."
 echo "Agent ID detectado: ${AGENT_ID}"
+echo "AVISO: se este host ja foi instalado/enrollado antes com um Agent ID diferente, o registro antigo dessa maquina no painel ficara orfao e devera ser removido manualmente."
 echo "Comandos sugeridos:"
 echo "  sudo systemctl enable --now ${SERVICE_NAME}"
 echo "  sudo systemctl status ${SERVICE_NAME}"

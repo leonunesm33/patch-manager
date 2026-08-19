@@ -337,6 +337,7 @@ sudo systemctl enable --now "${{SERVICE_NAME}}"
 
 echo "Instalacao concluida."
 echo "Agent ID: ${{AGENT_ID}}"
+echo "AVISO: se este host ja foi instalado/enrollado antes com um Agent ID diferente, o registro antigo dessa maquina no painel ficara orfao e devera ser removido manualmente."
 echo "Aguardando aprovacao no painel do Patch Manager."
 echo "Logs:"
 echo "  sudo journalctl -u ${{SERVICE_NAME}} -f"
@@ -533,6 +534,7 @@ Start-Service -Name $ServiceName
 
 Write-Host "Instalacao concluida."
 Write-Host "Agent ID: $AgentId"
+Write-Host "AVISO: se este host ja foi instalado/enrollado antes com um Agent ID diferente, o registro antigo dessa maquina no painel ficara orfao e devera ser removido manualmente."
 Write-Host "Aguardando aprovacao no painel do Patch Manager."
 Write-Host "Arquivo de ambiente: $EnvTarget"
 Write-Host "Servico registrado: $ServiceName"
