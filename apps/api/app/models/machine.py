@@ -19,6 +19,11 @@ class MachineModel(Base):
     pending_patches: Mapped[int] = mapped_column(Integer, default=0)
     last_check_in: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     risk: Mapped[str] = mapped_column(String(30))
+    hardware_fingerprint: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    identity_conflict_fingerprint: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    identity_conflict_detected_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
