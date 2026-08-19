@@ -373,13 +373,14 @@ def resolve_machine_identity_conflict(
 
     machine = repository.update(machine)
 
-    settings_service = SettingsService(db)
-    settings_service.record_operational_event(
-        "machine_identity_conflict_resolved",
-        current_user.username,
-        f"Resolveu conflito de identidade da maquina {machine.name}: "
-        f"fingerprint anterior {previous_fingerprint!r} substituido por {new_fingerprint!r}.",
-    )
+    if new_fingerprint is not None:
+        settings_service = SettingsService(db)
+        settings_service.record_operational_event(
+            "machine_identity_conflict_resolved",
+            current_user.username,
+            f"Resolveu conflito de identidade da maquina {machine.name}: "
+            f"fingerprint anterior {previous_fingerprint!r} substituido por {new_fingerprint!r}.",
+        )
 
     return Machine.model_validate(machine)
 
