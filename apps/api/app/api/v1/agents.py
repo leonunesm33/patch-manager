@@ -323,11 +323,12 @@ sudo chmod 660 "${{ENV_TARGET}}"
 sudo install -m 644 "${{INSTALL_ROOT}}/deploy/patch-manager-agent-linux.service" "${{SERVICE_TARGET}}"
 sudo chown -R patchmanager:patchmanager "${{INSTALL_ROOT}}" /var/log/patch-manager
 
-# Allow patchmanager to install packages and schedule reboots without password prompt
+# Allow patchmanager to install packages, schedule reboots, run upgrade scripts and read the hardware fingerprint without password prompt
 sudo tee /etc/sudoers.d/patch-manager > /dev/null <<'SUDOERS_EOF'
 patchmanager ALL=(root) NOPASSWD: /usr/sbin/shutdown
 patchmanager ALL=(root) NOPASSWD: /usr/bin/apt-get
 patchmanager ALL=(root) NOPASSWD: /bin/cat /sys/class/dmi/id/product_uuid
+patchmanager ALL=(root) NOPASSWD: /usr/bin/bash
 SUDOERS_EOF
 sudo chmod 440 /etc/sudoers.d/patch-manager
 sudo rm -f /etc/sudoers.d/patch-manager-shutdown
@@ -426,11 +427,12 @@ sudo chown root:patchmanager "${{ENV_TARGET}}"
 sudo chmod 660 "${{ENV_TARGET}}"
 sudo install -m 644 "${{INSTALL_ROOT}}/deploy/patch-manager-agent-linux.service" "${{SERVICE_TARGET}}"
 
-# Ensure sudoers covers apt-get, shutdown, and the hardware fingerprint read (idempotent rewrite)
+# Ensure sudoers covers apt-get, shutdown, bash for upgrade scripts, and the hardware fingerprint read (idempotent rewrite)
 sudo tee /etc/sudoers.d/patch-manager > /dev/null <<'SUDOERS_EOF'
 patchmanager ALL=(root) NOPASSWD: /usr/sbin/shutdown
 patchmanager ALL=(root) NOPASSWD: /usr/bin/apt-get
 patchmanager ALL=(root) NOPASSWD: /bin/cat /sys/class/dmi/id/product_uuid
+patchmanager ALL=(root) NOPASSWD: /usr/bin/bash
 SUDOERS_EOF
 sudo chmod 440 /etc/sudoers.d/patch-manager
 sudo rm -f /etc/sudoers.d/patch-manager-shutdown
