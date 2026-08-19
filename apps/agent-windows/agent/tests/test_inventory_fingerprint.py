@@ -15,3 +15,9 @@ def test_returns_none_when_no_override_and_powershell_fails(monkeypatch):
     monkeypatch.delenv("PATCH_MANAGER_FINGERPRINT_OVERRIDE", raising=False)
     monkeypatch.setattr("inventory._run_powershell_json", lambda script: None)
     assert _collect_hardware_fingerprint() is None
+
+
+def test_returns_none_when_uuid_is_whitespace(monkeypatch):
+    monkeypatch.delenv("PATCH_MANAGER_FINGERPRINT_OVERRIDE", raising=False)
+    monkeypatch.setattr("inventory._run_powershell_json", lambda script: {"uuid": "   "})
+    assert _collect_hardware_fingerprint() is None
