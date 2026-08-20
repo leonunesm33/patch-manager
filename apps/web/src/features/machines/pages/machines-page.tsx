@@ -89,7 +89,7 @@ export function MachinesPage() {
       ip: "",
       platform: "Windows",
       environment: "production",
-      group: "",
+      group: groups[0]?.name ?? "",
       status: "online",
       pending_patches: 0,
       risk: "important",
@@ -566,12 +566,26 @@ export function MachinesPage() {
               </label>
               <label>
                 <span className="field-label">Grupo</span>
-                <input
-                  className="input"
+                <select
+                  className="select"
                   value={form.group}
                   onChange={(event) => setForm((current) => ({ ...current, group: event.target.value }))}
-                  placeholder="Ex.: App Servers"
-                />
+                >
+                  {groups.length === 0 ? (
+                    <option value="" disabled>
+                      Nenhum grupo cadastrado
+                    </option>
+                  ) : (
+                    groups.map((group) => (
+                      <option key={group.id} value={group.name}>
+                        {group.name}
+                      </option>
+                    ))
+                  )}
+                  {form.group && !groups.some((group) => group.name === form.group) ? (
+                    <option value={form.group}>{form.group}</option>
+                  ) : null}
+                </select>
               </label>
               <label>
                 <span className="field-label">Status</span>
