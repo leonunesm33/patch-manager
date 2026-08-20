@@ -14,6 +14,7 @@ class MachineModel(Base):
     ip: Mapped[str] = mapped_column(String(45))
     platform: Mapped[str] = mapped_column(String(50))
     environment: Mapped[str] = mapped_column(String(32), default="production", nullable=False)
+    os_release: Mapped[str | None] = mapped_column(String(80), nullable=True)
     group: Mapped[str] = mapped_column("group_name", String(120), index=True)
     status: Mapped[str] = mapped_column(String(30))
     pending_patches: Mapped[int] = mapped_column(Integer, default=0)

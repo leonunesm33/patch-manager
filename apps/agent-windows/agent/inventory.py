@@ -54,6 +54,46 @@ def _collect_hardware_fingerprint() -> str | None:
     return str(value).strip() or None if value else None
 
 
+_WINDOWS_EDITION_SUFFIXES = (
+    "Datacenter",
+    "Standard",
+    "Enterprise",
+    "Essentials",
+    "Education",
+    "Foundation",
+    "Home",
+    "Pro",
+)
+
+
+def _parse_windows_os_release(caption: str) -> str | None:
+    value = caption.strip()
+    if value.startswith("Microsoft "):
+        value = value[len("Microsoft ") :]
+    if value.startswith("Windows "):
+        value = value[len("Windows ") :]
+    for suffix in _WINDOWS_EDITION_SUFFIXES:
+        if value.endswith(f" {suffix}"):
+            value = value[: -(len(suffix) + 1)]
+            break
+    value = value.strip()
+    return value or None
+
+
+@functools.lru_cache(maxsize=1)
+def _collect_os_release() -> str | None:
+    data = _run_powershell_json(
+        "Get-CimInstance Win32_OperatingSystem | "
+        "Select-Object @{Name='caption';Expression={$_.Caption}} | ConvertTo-Json -Compress"
+    )
+    if data is None:
+        return None
+    value = data.get("caption")
+    if not value:
+        return None
+    return _parse_windows_os_release(str(value))
+
+
 def _collect_windows_update_metrics() -> dict[str, object]:
     script = r"""
 $hotfixCount = (Get-HotFix | Measure-Object).Count
@@ -163,6 +203,7 @@ def collect_inventory(agent_version: str, execution_mode: str) -> dict[str, obje
         "hostname": hostname,
         "primary_ip": primary_ip,
         "hardware_fingerprint": _collect_hardware_fingerprint(),
+        "os_release": _collect_os_release(),
         "package_manager": "windows-update",
         "installed_packages": windows_metrics["installed_update_count"],
         "upgradable_packages": windows_metrics["upgradable_packages"],

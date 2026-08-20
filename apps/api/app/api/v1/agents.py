@@ -1437,6 +1437,7 @@ def submit_agent_inventory(
                 last_check_in=datetime.now(UTC),
                 risk=risk,
                 hardware_fingerprint=payload.hardware_fingerprint,
+                os_release=payload.os_release,
             )
         )
     else:
@@ -1444,6 +1445,8 @@ def submit_agent_inventory(
         machine.ip = payload.primary_ip
         machine.platform = "Ubuntu" if payload.platform.lower() == "linux" else payload.platform.title()
         machine.environment = machine.environment or "production"
+        if payload.os_release:
+            machine.os_release = payload.os_release
         machine.group = "Agent Managed"
         machine.status = "online"
         machine.pending_patches = payload.upgradable_packages

@@ -4,6 +4,7 @@ export type Machine = {
   ip: string;
   platform: string;
   environment: string;
+  os_release: string | null;
   group: string;
   status: "online" | "warning" | "offline";
   pending_patches: number;

@@ -98,3 +98,28 @@ def test_repeat_report_same_hostname_and_fingerprint_is_noop(client, db_session)
     assert machine.hardware_fingerprint == "uuid-eee"
     assert machine.identity_conflict_fingerprint is None
     assert machine.identity_conflict_detected_at is None
+
+
+def test_creates_machine_with_os_release(client, db_session):
+    _post_inventory(client, hostname="srv-so-01", os_release="Ubuntu 24.04")
+
+    machine = _get_machine(db_session)
+    assert machine.os_release == "Ubuntu 24.04"
+
+
+def test_os_release_updates_on_next_report(client, db_session):
+    _post_inventory(client, hostname="srv-so-02", os_release="Ubuntu 22.04")
+
+    _post_inventory(client, hostname="srv-so-02", os_release="Ubuntu 24.04")
+
+    machine = _get_machine(db_session)
+    assert machine.os_release == "Ubuntu 24.04"
+
+
+def test_missing_os_release_does_not_clear_previous_value(client, db_session):
+    _post_inventory(client, hostname="srv-so-03", os_release="Server 2022")
+
+    _post_inventory(client, hostname="srv-so-03")
+
+    machine = _get_machine(db_session)
+    assert machine.os_release == "Server 2022"

@@ -13,6 +13,7 @@ class Machine(BaseModel):
     ip: str
     platform: str
     environment: str
+    os_release: str | None = None
     group: str
     status: str
     pending_patches: int

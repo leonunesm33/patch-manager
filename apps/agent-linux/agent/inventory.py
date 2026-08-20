@@ -46,6 +46,31 @@ def _collect_hardware_fingerprint() -> str | None:
     return output.strip() or None
 
 
+def _parse_os_release(content: str) -> str | None:
+    values: dict[str, str] = {}
+    for line in content.splitlines():
+        if "=" not in line:
+            continue
+        key, _, raw_value = line.partition("=")
+        values[key.strip()] = raw_value.strip().strip('"')
+
+    name = values.get("NAME", "").strip()
+    version_id = values.get("VERSION_ID", "").strip()
+    if name and version_id:
+        return f"{name} {version_id}"
+    return values.get("PRETTY_NAME", "").strip() or name or None
+
+
+@functools.lru_cache(maxsize=1)
+def _collect_os_release() -> str | None:
+    try:
+        with open("/etc/os-release", encoding="utf-8") as handle:
+            content = handle.read()
+    except OSError:
+        return None
+    return _parse_os_release(content)
+
+
 # PackageKit/Cockpit priority → severity mapping
 _APT_PRIORITY_TO_SEVERITY: dict[str, str] = {
     "required": "critical",
@@ -300,6 +325,7 @@ def collect_inventory(agent_version: str, execution_mode: str) -> dict[str, obje
         "hostname": hostname,
         "primary_ip": primary_ip,
         "hardware_fingerprint": _collect_hardware_fingerprint(),
+        "os_release": _collect_os_release(),
         "package_manager": package_manager,
         "installed_packages": installed_packages,
         "upgradable_packages": upgradable_packages,

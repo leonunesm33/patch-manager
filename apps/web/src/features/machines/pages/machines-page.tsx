@@ -761,7 +761,7 @@ export function MachinesPage() {
               <th>Host</th>
               <th>IP</th>
               <th>Plataforma</th>
-              <th>Ambiente</th>
+              <th>SO</th>
               <th>Grupo</th>
               <th>Patches pendentes</th>
               <th>Pos-patch</th>
@@ -813,7 +813,7 @@ export function MachinesPage() {
                 </td>
                 <td className="code">{machine.ip}</td>
                 <td>{machine.platform}</td>
-                <td>{machine.environment}</td>
+                <td>{machine.os_release ?? <span className="muted">-</span>}</td>
                 <td>{machine.group}</td>
                 <td>
                   {machine.pending_patches > 0 ? (

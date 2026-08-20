@@ -49,6 +49,7 @@ class AgentInventoryRequest(BaseModel):
     windows_update_source: str | None = None
     os_name: str
     os_version: str
+    os_release: str | None = None
     kernel_version: str
     agent_version: str
     execution_mode: str
