@@ -86,6 +86,7 @@ class AgentConfig:
     default_execution_mode: str
     enable_real_apply: bool
     allow_security_only: bool
+    allow_security_and_critical: bool
     allowed_package_patterns: list[str]
     apt_apply_timeout_seconds: int
     enable_host_reboot: bool
@@ -120,6 +121,7 @@ def load_config() -> AgentConfig:
         default_execution_mode=os.getenv("PATCH_MANAGER_EXECUTION_MODE", "dry-run").strip().lower(),
         enable_real_apply=_read_bool("PATCH_MANAGER_ENABLE_REAL_APPLY", False),
         allow_security_only=_read_bool("PATCH_MANAGER_ALLOW_SECURITY_ONLY", False),
+        allow_security_and_critical=_read_bool("PATCH_MANAGER_ALLOW_SECURITY_AND_CRITICAL", False),
         allowed_package_patterns=[
             item.strip()
             for item in os.getenv("PATCH_MANAGER_ALLOWED_PACKAGE_PATTERNS", "").split(",")

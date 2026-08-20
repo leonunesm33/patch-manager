@@ -93,6 +93,8 @@ def update_execution_mode(
                 )
         if payload.allow_security_only is not None:
             settings_service.set_linux_allow_security_only(payload.allow_security_only)
+        if payload.allow_security_and_critical is not None:
+            settings_service.set_linux_allow_security_and_critical(payload.allow_security_and_critical)
         if payload.allowed_package_patterns is not None:
             settings_service.set_linux_allowed_package_patterns(payload.allowed_package_patterns)
         if payload.apt_apply_timeout_seconds is not None:

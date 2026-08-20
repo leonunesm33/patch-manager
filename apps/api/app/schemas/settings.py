@@ -18,6 +18,7 @@ class ExecutionModeSetting(BaseModel):
     linux_group_modes: list[LinuxGroupExecutionPolicy] = []
     real_apply_enabled: bool = False
     allow_security_only: bool = False
+    allow_security_and_critical: bool = False
     allowed_package_patterns: list[str] = []
     apt_apply_timeout_seconds: int = 900
     reboot_policy: str = "manual"

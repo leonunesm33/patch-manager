@@ -96,6 +96,7 @@ class AgentJobResponse(BaseModel):
     execution_mode: str
     real_apply_enabled: bool = False
     allow_security_only: bool = False
+    allow_security_and_critical: bool = False
     allowed_package_patterns: list[str] = []
     apt_apply_timeout_seconds: int = 900
     windows_scan_apply_enabled: bool = True

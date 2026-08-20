@@ -117,6 +117,7 @@ export function updateLinuxExecutionMode(
   options?: {
     real_apply_enabled?: boolean;
     allow_security_only?: boolean;
+    allow_security_and_critical?: boolean;
     allowed_package_patterns?: string[];
     apt_apply_timeout_seconds?: number;
     reboot_policy?: "manual" | "notify" | "maintenance-window";

@@ -6,6 +6,7 @@ class LinuxExecutionModeUpdate(BaseModel):
     machine_group: str | None = None
     real_apply_enabled: bool | None = None
     allow_security_only: bool | None = None
+    allow_security_and_critical: bool | None = None
     allowed_package_patterns: list[str] | None = None
     apt_apply_timeout_seconds: int | None = None
     reboot_policy: str | None = None

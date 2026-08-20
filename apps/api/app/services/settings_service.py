@@ -12,6 +12,7 @@ class SettingsService:
     LINUX_GROUP_MODE_PREFIX = "linux_group_mode::"
     LINUX_REAL_APPLY_ENABLED_KEY = "linux_real_apply_enabled"
     LINUX_SECURITY_ONLY_KEY = "linux_allow_security_only"
+    LINUX_SECURITY_AND_CRITICAL_KEY = "linux_allow_security_and_critical"
     LINUX_ALLOWED_PACKAGE_PATTERNS_KEY = "linux_allowed_package_patterns"
     LINUX_APT_APPLY_TIMEOUT_KEY = "linux_apt_apply_timeout"
     LINUX_REBOOT_POLICY_KEY = "linux_reboot_policy"
@@ -83,6 +84,7 @@ class SettingsService:
             "linux_group_modes": self.get_linux_group_execution_modes(machine_groups),
             "real_apply_enabled": self.get_linux_real_apply_enabled(),
             "allow_security_only": self.get_linux_allow_security_only(),
+            "allow_security_and_critical": self.get_linux_allow_security_and_critical(),
             "allowed_package_patterns": self.get_linux_allowed_package_patterns(),
             "apt_apply_timeout_seconds": self.get_linux_apt_apply_timeout_seconds(),
             "reboot_policy": self.get_linux_reboot_policy(),
@@ -138,6 +140,24 @@ class SettingsService:
     def set_linux_allow_security_only(self, enabled: bool) -> bool:
         normalized = "true" if enabled else "false"
         self.repository.upsert(self.LINUX_SECURITY_ONLY_KEY, normalized)
+        if enabled:
+            # Guardrails sao mutuamente exclusivos: ligar um desliga o outro.
+            self.repository.upsert(self.LINUX_SECURITY_AND_CRITICAL_KEY, "false")
+        return enabled
+
+    def get_linux_allow_security_and_critical(self) -> bool:
+        setting = self.repository.get(self.LINUX_SECURITY_AND_CRITICAL_KEY)
+        if setting is None:
+            self.repository.upsert(self.LINUX_SECURITY_AND_CRITICAL_KEY, "false")
+            return False
+        return setting.value.strip().lower() in {"1", "true", "yes", "on"}
+
+    def set_linux_allow_security_and_critical(self, enabled: bool) -> bool:
+        normalized = "true" if enabled else "false"
+        self.repository.upsert(self.LINUX_SECURITY_AND_CRITICAL_KEY, normalized)
+        if enabled:
+            # Guardrails sao mutuamente exclusivos: ligar um desliga o outro.
+            self.repository.upsert(self.LINUX_SECURITY_ONLY_KEY, "false")
         return enabled
 
     def get_linux_allowed_package_patterns(self) -> list[str]:

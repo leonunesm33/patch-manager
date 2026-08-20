@@ -178,6 +178,7 @@ export function SettingsPage() {
       const response = await updateLinuxExecutionMode(mode, undefined, {
         real_apply_enabled: settings?.execution.real_apply_enabled,
         allow_security_only: settings?.execution.allow_security_only,
+        allow_security_and_critical: settings?.execution.allow_security_and_critical,
         allowed_package_patterns: settings?.execution.allowed_package_patterns,
         apt_apply_timeout_seconds: settings?.execution.apt_apply_timeout_seconds,
         reboot_policy: settings?.execution.reboot_policy,
@@ -210,6 +211,7 @@ export function SettingsPage() {
       const response = await updateLinuxExecutionMode(settings.execution.linux_agent_mode, undefined, {
         real_apply_enabled: settings.execution.real_apply_enabled,
         allow_security_only: settings.execution.allow_security_only,
+        allow_security_and_critical: settings.execution.allow_security_and_critical,
         allowed_package_patterns: allowedPatternsDraft
           .split(",")
           .map((item) => item.trim())
@@ -536,7 +538,7 @@ export function SettingsPage() {
                   </button>
                 </div>
                 <div className="setting-row">
-                  <SettingTitle help="Quando ligado, instala apenas pacotes classificados como 'security' (ex: vindos do repositorio jammy-security). Patches de bugfix e enhancement sao ignorados — util para ambientes que so aceitam correcoes criticas.">
+                  <SettingTitle help="Quando ligado, instala apenas pacotes classificados como 'security' (ex: vindos do repositorio jammy-security). Patches de bugfix e enhancement sao ignorados — util para ambientes que so aceitam correcoes criticas. Mutuamente exclusivo com 'Seguranca e criticos'.">
                     Somente seguranca
                   </SettingTitle>
                   <button
@@ -550,6 +552,9 @@ export function SettingsPage() {
                               execution: {
                                 ...current.execution,
                                 allow_security_only: !current.execution.allow_security_only,
+                                allow_security_and_critical: current.execution.allow_security_only
+                                  ? current.execution.allow_security_and_critical
+                                  : false,
                               },
                             }
                           : current,
@@ -558,6 +563,34 @@ export function SettingsPage() {
                     type="button"
                   >
                     {settings?.execution.allow_security_only ? "Ligado" : "Desligado"}
+                  </button>
+                </div>
+                <div className="setting-row">
+                  <SettingTitle help="Quando ligado, instala pacotes classificados como 'security' OU com severidade critica, independente da categoria. Mais permissivo que 'Somente seguranca'. Mutuamente exclusivo com ela.">
+                    Seguranca e criticos
+                  </SettingTitle>
+                  <button
+                    className={settings?.execution.allow_security_and_critical ? "btn btn-primary" : "btn"}
+                    disabled={executionLoading}
+                    onClick={() =>
+                      setSettings((current) =>
+                        current
+                          ? {
+                              ...current,
+                              execution: {
+                                ...current.execution,
+                                allow_security_and_critical: !current.execution.allow_security_and_critical,
+                                allow_security_only: current.execution.allow_security_and_critical
+                                  ? current.execution.allow_security_only
+                                  : false,
+                              },
+                            }
+                          : current,
+                      )
+                    }
+                    type="button"
+                  >
+                    {settings?.execution.allow_security_and_critical ? "Ligado" : "Desligado"}
                   </button>
                 </div>
                 <div className="setting-row">

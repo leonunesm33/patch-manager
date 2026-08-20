@@ -88,6 +88,8 @@ def _classify_job_failure(error_message: str | None) -> str | None:
         return "guardrail_package_not_allowed"
     if "is not currently upgradable" in normalized:
         return "guardrail_not_upgradable"
+    if "does not have a security-tagged or critical-severity" in normalized:
+        return "guardrail_security_and_critical_blocked"
     if "does not have a security-tagged" in normalized:
         return "guardrail_security_only_blocked"
     if "windows apply path is disabled" in normalized:
@@ -303,6 +305,7 @@ PATCH_MANAGER_AGENT_VERSION=0.2.0
 PATCH_MANAGER_EXECUTION_MODE=apply
 PATCH_MANAGER_ENABLE_REAL_APPLY=true
 PATCH_MANAGER_ALLOW_SECURITY_ONLY=false
+PATCH_MANAGER_ALLOW_SECURITY_AND_CRITICAL=false
 PATCH_MANAGER_ALLOWED_PACKAGE_PATTERNS=
 PATCH_MANAGER_APT_APPLY_TIMEOUT=900
 PATCH_MANAGER_ENABLE_HOST_REBOOT=true
@@ -410,6 +413,7 @@ for REQUIRED_KEY in \
   "PATCH_MANAGER_ENV_FILE=${{ENV_TARGET}}" \
   PATCH_MANAGER_ENABLE_REAL_APPLY=true \
   PATCH_MANAGER_ALLOW_SECURITY_ONLY=false \
+  PATCH_MANAGER_ALLOW_SECURITY_AND_CRITICAL=false \
   PATCH_MANAGER_ALLOWED_PACKAGE_PATTERNS= \
   PATCH_MANAGER_APT_APPLY_TIMEOUT=900 \
   PATCH_MANAGER_ENABLE_HOST_REBOOT=true \
@@ -1553,6 +1557,7 @@ def claim_job_for_agent(
         else "apply",
         real_apply_enabled=settings_service.get_linux_real_apply_enabled(),
         allow_security_only=settings_service.get_linux_allow_security_only(),
+        allow_security_and_critical=settings_service.get_linux_allow_security_and_critical(),
         allowed_package_patterns=settings_service.get_linux_allowed_package_patterns(),
         apt_apply_timeout_seconds=settings_service.get_linux_apt_apply_timeout_seconds(),
         windows_scan_apply_enabled=settings_service.get_windows_scan_apply_enabled(),

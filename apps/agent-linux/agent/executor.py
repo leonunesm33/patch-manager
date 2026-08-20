@@ -180,13 +180,18 @@ def execute_patch_job_with_mode(
     if normalized_mode == "apply":
         real_apply_enabled = config.enable_real_apply if config else False
         allow_security_only = config.allow_security_only if config else False
+        allow_security_and_critical = config.allow_security_and_critical if config else False
         allowed_package_patterns = config.allowed_package_patterns if config else []
         apt_apply_timeout_seconds = config.apt_apply_timeout_seconds if config else 900
 
         real_apply_enabled = _resolve_runtime_flag(job, "real_apply_enabled", real_apply_enabled)
         allow_security_only = _resolve_runtime_flag(job, "allow_security_only", allow_security_only)
+        allow_security_and_critical = _resolve_runtime_flag(
+            job, "allow_security_and_critical", allow_security_and_critical
+        )
         allowed_package_patterns = _resolve_runtime_patterns(job, allowed_package_patterns)
         apt_apply_timeout_seconds = _resolve_runtime_timeout(job, apt_apply_timeout_seconds)
+        job_severity = str(job.get("severity") or "").strip().lower()
 
         if not real_apply_enabled:
             code, output = _run(["sudo", "apt-get", "-s", "install", "-y", package_name], timeout=60)
@@ -213,6 +218,17 @@ def execute_patch_job_with_mode(
 
         if allow_security_only and not _has_security_candidate(package_name):
             return "failed", f"Package {package_name} does not have a security-tagged upgrade candidate.", False
+
+        if (
+            allow_security_and_critical
+            and job_severity != "critical"
+            and not _has_security_candidate(package_name)
+        ):
+            return (
+                "failed",
+                f"Package {package_name} does not have a security-tagged or critical-severity upgrade candidate.",
+                False,
+            )
 
         # Refresh apt index before installing to avoid stale mirror 404s.
         # Non-fatal: if the update fails we still attempt the install with the cached index.

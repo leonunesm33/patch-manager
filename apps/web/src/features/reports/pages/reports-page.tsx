@@ -23,6 +23,8 @@ function getFailureReasonLabel(reason: PatchJobItem["failure_reason"]) {
       return "pacote nao atualizavel";
     case "guardrail_security_only_blocked":
       return "bloqueado por security-only";
+    case "guardrail_security_and_critical_blocked":
+      return "bloqueado por seguranca-e-criticos";
     case "execution_error":
       return "falha de execucao";
     default:
