@@ -9,7 +9,17 @@ class MachineRepository:
         self.session = session
 
     def list_all(self) -> list[MachineModel]:
-        return list(self.session.scalars(select(MachineModel).order_by(MachineModel.name)))
+        # order_by precisa de um desempate deterministico (id) alem do name:
+        # duas maquinas com o mesmo hostname (ex.: clone de template antes do
+        # rename final) ou um hostname mudando entre polls fazem o Postgres
+        # retornar ordens diferentes a cada consulta quando o desempate e so
+        # por name, o que faz a maquina "pular" de pagina no front (aparece e
+        # some) mesmo com o total de maquinas inalterado.
+        return list(
+            self.session.scalars(
+                select(MachineModel).order_by(MachineModel.name, MachineModel.id)
+            )
+        )
 
     def get_by_id(self, machine_id: str) -> MachineModel | None:
         return self.session.get(MachineModel, machine_id)
