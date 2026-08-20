@@ -10,12 +10,14 @@ export type ScheduleItem = {
   reboot_date: string | null;
   reboot_time: string | null;
   recurrence: ScheduleRecurrence;
+  recurrence_weekday: number | null;
+  recurrence_ordinal: number | null;
   reboot_policy: string;
   is_active: boolean;
 };
 
 export type ScheduleScopeType = "machine" | "group" | "os";
-export type ScheduleRecurrence = "once" | "daily" | "weekly" | "monthly";
+export type ScheduleRecurrence = "once" | "daily" | "weekly" | "monthly" | "monthly_weekday";
 export type ScheduleRebootPolicy = "if-needed" | "always" | "never";
 
 export type ScheduleCreate = {
@@ -27,6 +29,8 @@ export type ScheduleCreate = {
   reboot_date: string | null;
   reboot_time: string | null;
   recurrence: ScheduleRecurrence;
+  recurrence_weekday: number | null;
+  recurrence_ordinal: number | null;
   reboot_policy: ScheduleRebootPolicy;
   is_active: boolean;
 };

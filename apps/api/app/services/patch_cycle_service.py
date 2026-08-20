@@ -380,6 +380,8 @@ class PatchCycleService:
             schedule.install_date,
             schedule.install_time,
             now,
+            recurrence_weekday=schedule.recurrence_weekday,
+            recurrence_ordinal=schedule.recurrence_ordinal,
         )
 
     def _is_reboot_window_due(self, schedule: ScheduleModel, now: datetime) -> bool:
@@ -390,6 +392,8 @@ class PatchCycleService:
             schedule.reboot_date or schedule.install_date,
             schedule.reboot_time,
             now,
+            recurrence_weekday=schedule.recurrence_weekday,
+            recurrence_ordinal=schedule.recurrence_ordinal,
         )
 
     # Janela máxima de tolerância após o horário agendado. Após este período
@@ -419,6 +423,9 @@ class PatchCycleService:
         anchor_date: date | None,
         scheduled_time: str | None,
         now: datetime,
+        *,
+        recurrence_weekday: int | None = None,
+        recurrence_ordinal: int | None = None,
     ) -> bool:
         if not scheduled_time:
             return False
@@ -444,7 +451,26 @@ class PatchCycleService:
             return now.date() >= anchor and now.weekday() == anchor.weekday()
         if recurrence_value == "monthly":
             return now.date() >= anchor and now.day == anchor.day
+        if recurrence_value == "monthly_weekday":
+            if recurrence_weekday is None or recurrence_ordinal is None:
+                return False
+            if now.date() < anchor or now.weekday() != recurrence_weekday:
+                return False
+            if recurrence_ordinal == -1:
+                return self._is_last_weekday_occurrence(now.date())
+            return self._ordinal_of_weekday_in_month(now.date()) == recurrence_ordinal
         return False
+
+    @staticmethod
+    def _ordinal_of_weekday_in_month(value: date) -> int:
+        """Retorna em qual posicao (1a, 2a, ...) o dia da semana de `value` cai no mes."""
+        return (value.day - 1) // 7 + 1
+
+    @staticmethod
+    def _is_last_weekday_occurrence(value: date) -> bool:
+        """True se nao ha outra ocorrencia do mesmo dia da semana mais adiante no mes."""
+        next_occurrence = value + timedelta(days=7)
+        return next_occurrence.month != value.month
 
     def _schedule_period_key(self, schedule: ScheduleModel, now: datetime, *, use_reboot: bool) -> str:
         scheduled_time = schedule.reboot_time if use_reboot else schedule.install_time
@@ -452,7 +478,7 @@ class PatchCycleService:
         if recurrence_value == "once":
             scheduled_date = schedule.reboot_date if use_reboot else schedule.install_date
             return f"{scheduled_date or now.date()}T{scheduled_time}"
-        if recurrence_value == "monthly":
+        if recurrence_value in {"monthly", "monthly_weekday"}:
             return f"{now:%Y-%m}T{scheduled_time}"
         if recurrence_value == "weekly":
             return f"{now:%G-W%V}T{scheduled_time}"

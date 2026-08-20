@@ -32,6 +32,8 @@ const emptyScheduleForm: ScheduleCreate = {
   reboot_date: today,
   reboot_time: "03:00",
   recurrence: "weekly",
+  recurrence_weekday: null,
+  recurrence_ordinal: null,
   reboot_policy: "if-needed",
   is_active: true,
 };
@@ -41,7 +43,26 @@ const recurrenceLabels: Record<ScheduleRecurrence, string> = {
   daily: "diaria",
   weekly: "semanal",
   monthly: "mensal",
+  monthly_weekday: "mensal (dia da semana)",
 };
+
+const weekdayLabels = [
+  "segunda-feira",
+  "terca-feira",
+  "quarta-feira",
+  "quinta-feira",
+  "sexta-feira",
+  "sabado",
+  "domingo",
+];
+
+const ordinalOptions: { value: number; label: string }[] = [
+  { value: 1, label: "1a" },
+  { value: 2, label: "2a" },
+  { value: 3, label: "3a" },
+  { value: 4, label: "4a" },
+  { value: -1, label: "ultima" },
+];
 
 const scopeLabels: Record<ScheduleScopeType, string> = {
   machine: "Maquina",
@@ -65,6 +86,8 @@ function normalizeScheduleForEdit(schedule: ScheduleItem): ScheduleCreate {
     reboot_date: schedule.reboot_date ?? schedule.install_date ?? today,
     reboot_time: schedule.reboot_time ?? "03:00",
     recurrence: schedule.recurrence ?? "weekly",
+    recurrence_weekday: schedule.recurrence_weekday ?? null,
+    recurrence_ordinal: schedule.recurrence_ordinal ?? null,
     reboot_policy: schedule.reboot_policy.toLowerCase().includes("nao")
       ? "never"
       : schedule.reboot_policy.toLowerCase().includes("sempre")
@@ -384,19 +407,67 @@ export function SchedulesPage() {
               <select
                 className="select"
                 value={form.recurrence}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const recurrence = event.target.value as ScheduleRecurrence;
                   setForm((current) => ({
                     ...current,
-                    recurrence: event.target.value as ScheduleRecurrence,
-                  }))
-                }
+                    recurrence,
+                    recurrence_weekday:
+                      recurrence === "monthly_weekday" ? (current.recurrence_weekday ?? 3) : null,
+                    recurrence_ordinal:
+                      recurrence === "monthly_weekday" ? (current.recurrence_ordinal ?? 3) : null,
+                  }));
+                }}
               >
                 <option value="once">unica</option>
                 <option value="daily">diaria</option>
                 <option value="weekly">semanal</option>
                 <option value="monthly">mensal</option>
+                <option value="monthly_weekday">mensal (dia da semana)</option>
               </select>
             </label>
+            {form.recurrence === "monthly_weekday" ? (
+              <div className="form-row">
+                <label>
+                  <span className="field-label">Posicao no mes</span>
+                  <select
+                    className="select"
+                    value={form.recurrence_ordinal ?? 3}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        recurrence_ordinal: Number(event.target.value),
+                      }))
+                    }
+                  >
+                    {ordinalOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span className="field-label">Dia da semana</span>
+                  <select
+                    className="select"
+                    value={form.recurrence_weekday ?? 3}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        recurrence_weekday: Number(event.target.value),
+                      }))
+                    }
+                  >
+                    {weekdayLabels.map((label, index) => (
+                      <option key={label} value={index}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            ) : null}
             <div className="form-row">
               <label>
                 <span className="field-label">Data de instalacao</span>

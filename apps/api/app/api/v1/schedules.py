@@ -48,7 +48,11 @@ def _normalize_scope_type(scope_type: str) -> str:
 
 def _normalize_recurrence(recurrence: str) -> str:
     normalized = recurrence.strip().lower()
-    return normalized if normalized in {"once", "daily", "weekly", "monthly"} else "weekly"
+    return (
+        normalized
+        if normalized in {"once", "daily", "weekly", "monthly", "monthly_weekday"}
+        else "weekly"
+    )
 
 
 def _scope_label(scope_type: str, scope_value: str) -> str:
@@ -66,11 +70,42 @@ def _recurrence_label(recurrence: str) -> str:
         "daily": "Diaria",
         "weekly": "Semanal",
         "monthly": "Mensal",
+        "monthly_weekday": "Mensal (dia da semana)",
     }
     return labels.get(recurrence, recurrence)
 
 
-def _cron_label(recurrence: str, install_time: str) -> str:
+_WEEKDAY_NAMES = [
+    "segunda-feira",
+    "terca-feira",
+    "quarta-feira",
+    "quinta-feira",
+    "sexta-feira",
+    "sabado",
+    "domingo",
+]
+_ORDINAL_NAMES = {1: "1a", 2: "2a", 3: "3a", 4: "4a", -1: "ultima"}
+
+
+def _monthly_weekday_label(weekday: int | None, ordinal: int | None) -> str | None:
+    if weekday is None or ordinal is None or not (0 <= weekday <= 6):
+        return None
+    ordinal_name = _ORDINAL_NAMES.get(ordinal)
+    if ordinal_name is None:
+        return None
+    return f"{ordinal_name} {_WEEKDAY_NAMES[weekday]} do mes"
+
+
+def _cron_label(
+    recurrence: str,
+    install_time: str,
+    recurrence_weekday: int | None = None,
+    recurrence_ordinal: int | None = None,
+) -> str:
+    if recurrence == "monthly_weekday":
+        detail = _monthly_weekday_label(recurrence_weekday, recurrence_ordinal)
+        if detail:
+            return f"{detail}, {install_time}"
     return f"{_recurrence_label(recurrence)}, {install_time}"
 
 
@@ -102,7 +137,11 @@ def _apply_payload(schedule: ScheduleModel, payload: ScheduleCreate) -> Schedule
     schedule.reboot_date = payload.reboot_date
     schedule.reboot_time = payload.reboot_time if payload.reboot_policy != "never" else None
     schedule.recurrence = recurrence
-    schedule.cron_label = _cron_label(recurrence, schedule.install_time)
+    schedule.recurrence_weekday = payload.recurrence_weekday if recurrence == "monthly_weekday" else None
+    schedule.recurrence_ordinal = payload.recurrence_ordinal if recurrence == "monthly_weekday" else None
+    schedule.cron_label = _cron_label(
+        recurrence, schedule.install_time, schedule.recurrence_weekday, schedule.recurrence_ordinal
+    )
     schedule.reboot_policy = _reboot_policy_label(payload.reboot_policy, schedule.reboot_time)
     schedule.is_active = payload.is_active
     return schedule
