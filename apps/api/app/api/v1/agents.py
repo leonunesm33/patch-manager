@@ -1447,7 +1447,7 @@ def submit_agent_inventory(
         machine.environment = machine.environment or "production"
         if payload.os_release:
             machine.os_release = payload.os_release
-        machine.group = "Agent Managed"
+        machine.group = machine.group or "Agent Managed"
         machine.status = "online"
         machine.pending_patches = payload.upgradable_packages
         machine.last_check_in = datetime.now(UTC)

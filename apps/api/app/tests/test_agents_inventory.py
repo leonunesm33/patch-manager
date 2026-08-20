@@ -123,3 +123,17 @@ def test_missing_os_release_does_not_clear_previous_value(client, db_session):
 
     machine = _get_machine(db_session)
     assert machine.os_release == "Server 2022"
+
+
+def test_manual_group_reassignment_survives_next_inventory_report(client, db_session):
+    _post_inventory(client, hostname="srv-grupo-01")
+
+    machine = _get_machine(db_session)
+    assert machine.group == "Agent Managed"
+    machine.group = "Database"
+    db_session.commit()
+
+    _post_inventory(client, hostname="srv-grupo-01")
+
+    machine = _get_machine(db_session)
+    assert machine.group == "Database"
