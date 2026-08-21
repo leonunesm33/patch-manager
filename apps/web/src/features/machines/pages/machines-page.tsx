@@ -12,6 +12,7 @@ import {
 } from "@/features/machines/api";
 import { ActionMenu } from "@/components/common/action-menu";
 import { ConfirmModal } from "@/components/common/confirm-modal";
+import { InfoHint } from "@/components/common/info-hint";
 import {
   requestConnectedAgentUpgrade,
   requestConnectedAgentsBatchUpgrade,
@@ -772,7 +773,10 @@ export function MachinesPage() {
               <th>Plataforma</th>
               <th>SO</th>
               <th>Grupo</th>
-              <th>Patches pendentes</th>
+              <th>
+                Patches pendentes{" "}
+                <InfoHint text="Total de patches pendentes / quantos desses são de segurança ou severidade crítica." />
+              </th>
               <th>Pos-patch</th>
               <th>Ultimo check-in</th>
               <th>Status</th>
@@ -834,7 +838,7 @@ export function MachinesPage() {
                       title="total / segurança e críticos"
                       type="button"
                     >
-                      {machine.pending_patches}/{machine.pending_security_critical_patches} pendentes
+                      {machine.pending_patches}/{machine.pending_security_critical_patches}
                     </button>
                   ) : (
                     <span className="muted">0/0</span>

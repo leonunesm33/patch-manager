@@ -90,8 +90,19 @@ def _parse_windows_os_release(caption: str) -> str | None:
     return value or None
 
 
-@functools.lru_cache(maxsize=1)
+# Cache manual: armazena apenas quando a coleta é bem-sucedida.
+# lru_cache cachearia None permanentemente se o PowerShell falhar na
+# inicialização do serviço (ex.: WMI ainda carregando), impedindo
+# retentativas nos ciclos seguintes.
+_os_release_cache: str | None = None
+_os_release_collected: bool = False
+
+
 def _collect_os_release() -> str | None:
+    global _os_release_cache, _os_release_collected
+    if _os_release_collected:
+        return _os_release_cache
+
     data = _run_powershell_json(
         "Get-CimInstance Win32_OperatingSystem | "
         "Select-Object @{Name='caption';Expression={$_.Caption}} | ConvertTo-Json -Compress"
@@ -99,8 +110,8 @@ def _collect_os_release() -> str | None:
     if data is None:
         _logger.warning(
             "os_release_collection_failed: Win32_OperatingSystem query returned no data; "
-            "os_release will be null. Ensure the agent exe was built after 2026-08-20 "
-            "(commit 91feb3e) — older builds lack this feature."
+            "os_release will be null this cycle and retried on next inventory. "
+            "Ensure the agent exe was built after 2026-08-20 (commit 91feb3e)."
         )
         return None
     value = data.get("caption")
@@ -109,6 +120,10 @@ def _collect_os_release() -> str | None:
         return None
     result = _parse_windows_os_release(str(value))
     _logger.debug("os_release_collected: raw=%r parsed=%r", value, result)
+    # Só marca como coletado se o resultado for válido
+    if result is not None:
+        _os_release_cache = result
+        _os_release_collected = True
     return result
 
 

@@ -613,7 +613,8 @@ export function ReportsPage() {
           ) : null}
           <pre
             style={{
-              background: "var(--surface-alt, #f0f0f0)",
+              background: "var(--surface-2)",
+              color: "var(--text)",
               borderRadius: 6,
               padding: "12px 14px",
               fontSize: 12,
