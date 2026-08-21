@@ -1,6 +1,7 @@
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ConfirmModal } from "@/components/common/confirm-modal";
+import { CopyButton } from "@/components/common/copy-button";
 import { StatusBadge } from "@/components/common/status-badge";
 import { formatDateTimeSaoPaulo } from "@/lib/datetime";
 import {
@@ -813,7 +814,10 @@ export function SettingsPage() {
                 ["Atualizacao Windows", windowsUpgradeCommand],
               ].map(([label, command]) => (
                 <label key={label}>
-                  <span className="field-label">{label}</span>
+                  <span className="field-label" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {label}
+                    {command ? <CopyButton text={command} /> : null}
+                  </span>
                   <code className="command-snippet">{command}</code>
                 </label>
               ))}

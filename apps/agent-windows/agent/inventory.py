@@ -1,9 +1,12 @@
 import functools
 import json
+import logging
 import os
 import platform
 import socket
 import subprocess
+
+_logger = logging.getLogger("patch_manager_agent_windows")
 
 
 def _as_list(value: object) -> list[dict[str, object]]:
@@ -23,18 +26,25 @@ def _run_powershell_json(script: str) -> dict[str, object] | None:
             text=True,
             timeout=60,
         )
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError) as exc:
+        _logger.warning("powershell_exec_error: %s", exc)
         return None
 
     if completed.returncode != 0:
+        stderr_snippet = (completed.stderr or "").strip()[:200]
+        _logger.warning(
+            "powershell_nonzero_exit: rc=%d stderr=%r", completed.returncode, stderr_snippet
+        )
         return None
 
     raw_output = (completed.stdout or "").strip()
     if not raw_output:
+        _logger.warning("powershell_empty_output for script: %s", script[:120])
         return None
     try:
         parsed = json.loads(raw_output)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as exc:
+        _logger.warning("powershell_json_decode_error: %s | output: %r", exc, raw_output[:200])
         return None
     return parsed if isinstance(parsed, dict) else None
 
@@ -87,11 +97,19 @@ def _collect_os_release() -> str | None:
         "Select-Object @{Name='caption';Expression={$_.Caption}} | ConvertTo-Json -Compress"
     )
     if data is None:
+        _logger.warning(
+            "os_release_collection_failed: Win32_OperatingSystem query returned no data; "
+            "os_release will be null. Ensure the agent exe was built after 2026-08-20 "
+            "(commit 91feb3e) — older builds lack this feature."
+        )
         return None
     value = data.get("caption")
     if not value:
+        _logger.warning("os_release_empty_caption: caption field missing or empty in CIM response")
         return None
-    return _parse_windows_os_release(str(value))
+    result = _parse_windows_os_release(str(value))
+    _logger.debug("os_release_collected: raw=%r parsed=%r", value, result)
+    return result
 
 
 def _collect_windows_update_metrics() -> dict[str, object]:

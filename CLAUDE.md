@@ -194,9 +194,88 @@ para que o servidor POC possa servi-lo via `/api/v1/agents/install/windows-agent
 - Filtros de `Aprovacoes` ficam ocultos atras de botao `Filtros`.
 - `Relatorios` agora concentra dados e exportacoes.
 - Acoes de fila `Gerar jobs agora` e `Executar proximo ciclo` foram movidas para `Operacoes`.
-- `Agendamentos` suporta escopo por maquina, grupo ou SO, recorrencia unica/diaria/semanal/mensal e horarios separados para instalacao e reboot.
-- `Maquinas` possui grupos de maquinas em popup para evitar poluicao visual.
+- `Agendamentos` suporta escopo por maquina, grupo ou SO; recorrencia unica/diaria/semanal/mensal **e mensal-por-dia-da-semana** (`monthly_weekday` — ex.: "3a quinta-feira do mes", "ultima sexta-feira do mes"); horarios separados para instalacao e reboot.
+- `Maquinas` possui grupos de maquinas em popup para evitar poluicao visual; o campo Grupo no formulario de editar/criar maquina e um `<select>` alimentado pelos grupos cadastrados (nao texto livre).
+- `Maquinas` tem coluna `SO` (versao amigavel do SO, ex.: "Ubuntu 24.04", "Server 2022") coletada pelo agente, separada da coluna `Plataforma`.
+- Deteccao de conflito de identidade de agente (clones de template com hostname provisorio): fingerprint de hardware compara maquinas com o mesmo `agent_id`; UI mostra badge e acao "Resolver conflito de identidade".
 - Windows agent coleta nomes reais dos updates quando possivel, nao apenas IDs.
+- Guardrails Linux: alem de `Somente seguranca`, existe `Seguranca e criticos` (instala patch se for security-tagged **ou** severidade `critical`). Os dois sao mutuamente exclusivos (ligar um desliga o outro).
+
+## Padrao de implementacao para novos campos/recursos
+
+Ao adicionar um campo persistido (ex.: nova coluna em `machines` ou `schedules`), a ordem que funcionou de forma consistente:
+
+1. **Model** (`apps/api/app/models/*.py`): adicionar coluna `Mapped[...]`, nullable a menos que haja um default seguro.
+2. **Migration** (`apps/api/alembic/versions/`): nome `YYYYMMDD_NNNN_descricao.py`, `revision`/`down_revision` apontando pro head atual (`alembic heads` confirma). Rodar `alembic heads`/`alembic history` para validar a cadeia antes de aplicar.
+3. **Schema** (`apps/api/app/schemas/*.py`): schema de resposta e de create/update. Validacao cross-field (ex.: "campo X obrigatorio quando campo Y = valor Z") vai num `@model_validator(mode="after")` do Pydantic v2, nao no endpoint.
+4. **API** (`apps/api/app/api/v1/*.py`): normalizacao/rotulos (`_normalize_*`, `_*_label`) e persistencia (`_apply_payload` ou equivalente).
+5. **Repository/Service**: logica de negocio (ex.: `patch_cycle_service.py` decide quando um agendamento "dispara"; `settings_service.py` guarda config chave-valor generica).
+6. **Frontend types** (`apps/web/src/features/<area>/types.ts`): espelhar o schema da API.
+7. **Frontend UI** (`apps/web/src/features/<area>/pages/*.tsx`): form, tabela, labels.
+8. **Testes**: pelo menos um teste de logica de negocio pura (ex.: `test_patch_cycle_schedule_recurrence.py`) e um teste de API via `TestClient` (ex.: `test_schedules_monthly_weekday.py`), usando os fixtures de `apps/api/app/tests/conftest.py` (`client`, `db_session`, SQLite in-memory).
+
+Guardrails/flags mutuamente exclusivos (ex.: `allow_security_only` x `allow_security_and_critical`): a exclusao mutua **tem que ser garantida no service/backend** (cada setter zera o outro), nunca apenas na UI — um script ou outro cliente da API tambem precisa respeitar a regra.
+
+Campos que o operador pode editar manualmente mas que tambem sao atualizados por um processo automatico (ex.: `machine.group`, preenchido tanto pelo agente a cada inventario quanto pelo formulario de edicao): o processo automatico so deve aplicar um **default quando o campo ainda esta vazio** (`campo = campo or default`), nunca sobrescrever incondicionalmente — senao a edicao manual e revertida no proximo ciclo do agente (foi um bug real, ver historico de commits de `apps/api/app/api/v1/agents.py`).
+
+## Armadilhas tecnicas conhecidas
+
+- **Bit de execucao (chmod) cai ao editar via caminho UNC** (`\\wsl.localhost\...`): qualquer edicao feita a partir do Windows num arquivo que era `100755` (scripts `.sh`, alguns `.py`) some para `100644`. Sempre conferir `git diff --summary | grep -i mode` antes de commitar e rodar `chmod 755 <arquivo>` nos que precisam.
+- **`ORDER BY` sem desempate determinístico gera "flicker" na paginacao do front**: se duas linhas empatam na coluna de ordenacao (ex.: dois hosts com o mesmo `name`, comum em maquinas clonadas de template antes do rename), o Postgres nao garante a mesma ordem entre consultas. Como a paginacao das listas e so no front (indice de pagina fixo sobre lista ja ordenada), isso faz um item "sumir e reaparecer" mesmo com o total inalterado. Sempre desempatar por uma coluna unica e estavel (ex.: `id`) — ver `MachineRepository.list_all()`.
+- **`docker compose` (plugin v2) pode nao estar instalado no WSL**, so o binario `docker` puro. Sem sudo: baixar o binario oficial e colocar em `~/.docker/cli-plugins/docker-compose` (plugin por usuario, nao precisa de root):
+  ```bash
+  mkdir -p ~/.docker/cli-plugins
+  curl -fsSL -o ~/.docker/cli-plugins/docker-compose \
+    https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64
+  chmod +x ~/.docker/cli-plugins/docker-compose
+  ```
+- **Gateway nginx forca redirect para HTTPS com certificado self-signed** (`infra/gateway/nginx.conf`), o que bloqueia navegadores headless (Playwright) com `ERR_CERT_AUTHORITY_INVALID` mesmo em `http://localhost/`. Para testar a UI via browser automatizado sem mexer no gateway real: subir um override temporario do `docker-compose.yml` (fora do repo, ex. em `~/tmp/`) expondo o container `web` numa porta alternativa com um `nginx.conf` custom que proxeia `/api/` para `http://api:8000` (rede interna do compose), sem TLS. Reverter com `docker compose up -d --force-recreate web` (usando so o `docker-compose.yml` do repo) ao terminar, e apagar os arquivos temporarios.
+- **"Funciona aqui mas nao no ambiente do usuario" ao investigar bug relatado apos deploy**: antes de assumir bug de codigo, confirmar que o ambiente relatante rodou o rebuild da imagem apos o `git pull` — `git pull` sozinho NAO reconstroi a imagem Docker. Se um campo novo simplesmente "nao aplica" ou "some depois de salvar", suspeitar de schema Pydantic antigo (versao anterior ao commit) ignorando silenciosamente o campo desconhecido no payload.
+- **`_schedule_period_key`/dedup de jobs**: recorrencias que devem disparar uma vez por mes (ex. `monthly`, `monthly_weekday`) usam a chave `YYYY-MM`; reagendar para o mesmo horario ja processado no periodo atual pode nao gerar novo job por deduplicacao (ja documentado abaixo em "Pontos de atencao atuais").
+- **Ordem de leitura do Vite (`.env`)**: o `Dockerfile` de `apps/web` so faz `COPY` de arquivos explicitamente listados (`package*.json`, `index.html`, `tsconfig*.json`, `vite.config.ts`, `.env.example`, `src`) — um `.env` criado ad-hoc no host **nao entra na imagem** a menos que o Dockerfile seja alterado para copia-lo. `VITE_API_BASE_URL` so tem efeito se o arquivo certo (`.env`/`.env.production`) estiver no build context E for copiado.
+
+## Testes automatizados
+
+```bash
+# API (pytest, SQLite in-memory via fixtures de conftest.py)
+cd ~/projetos/patch-manager/apps/api
+source .venv/bin/activate
+python -m pytest app/tests/ -v
+
+# Agente Linux (usa o mesmo venv da API, so tem stdlib)
+cd ~/projetos/patch-manager/apps/agent-linux
+source ~/projetos/patch-manager/apps/api/.venv/bin/activate
+python -m pytest agent/tests/ -v
+
+# Agente Windows (idem)
+cd ~/projetos/patch-manager/apps/agent-windows
+source ~/projetos/patch-manager/apps/api/.venv/bin/activate
+python -m pytest agent/tests/ -v
+
+# Frontend (typecheck)
+cd ~/projetos/patch-manager/apps/web
+npx tsc -b
+```
+
+Auth em teste de API: `apps/api/app/tests/conftest.py` ja tem overrides para `get_db`/`get_agent_identity`. Endpoints com `require_operator`/`require_admin` precisam de override pontual no proprio teste (ver `test_machines_identity_conflict.py` ou `test_schedules_monthly_weekday.py` como referencia — classe `_FakeOperator` + `app.dependency_overrides[require_operator] = lambda: _FakeOperator()`, sempre limpando no `finally`).
+
+## Variaveis de ambiente e segredos (nomes apenas — nunca commitar valores reais)
+
+| Variavel | Onde e usada | Arquivo de origem (valor real) |
+|---|---|---|
+| `POSTGRES_PASSWORD`, `POSTGRES_USER`, `POSTGRES_DB` | container `db` | `infra/compose/.env` |
+| `PATCH_MANAGER_HTTP_PORT`, `PATCH_MANAGER_HTTPS_PORT` | gateway nginx | `infra/compose/.env` |
+| `JWT_SECRET`, `JWT_ALGORITHM`, `JWT_EXPIRE_MINUTES` | autenticacao da API | `infra/env/api.env` |
+| `DATABASE_URL` | conexao da API ao Postgres | `infra/env/api.env` |
+| `SEED_ADMIN_USERNAME`, `SEED_ADMIN_PASSWORD` | usuario admin criado no seed (`python -m app.seed`) | `infra/env/api.env` |
+| `AGENT_BOOTSTRAP_TOKEN` | token usado por agentes novos para se cadastrar | `infra/env/api.env` (tambem editavel via UI em Configuracoes) |
+| `SEED_LINUX_AGENT_ID`, `SEED_LINUX_AGENT_KEY` | credencial do agente Linux de demo/seed | `infra/env/api.env` |
+| `PATCH_MANAGER_AGENT_KEY`, `PATCH_MANAGER_AGENT_ID` | credencial de um agente instalado (Linux/Windows) | `.env` local do agente (`/etc/patch-manager/...` ou `C:\ProgramData\PatchManager\agent-windows.env`) |
+| `PATCH_MANAGER_ALLOW_SECURITY_ONLY`, `PATCH_MANAGER_ALLOW_SECURITY_AND_CRITICAL` | fallback local do guardrail quando o agente esta offline da central | `.env` do agente Linux |
+
+Os arquivos `*.env.example` no repo (`infra/compose/.env.example`, `infra/env/api.env.example`) documentam todas as chaves esperadas com valores placeholder — sempre usa-los como referencia de "quais variaveis existem", nunca os valores reais que ja estejam em `infra/compose/.env`/`infra/env/api.env` (esses dois arquivos sao gitignored).
+
+Login do seed admin (painel web): usuario/senha vem de `SEED_ADMIN_USERNAME`/`SEED_ADMIN_PASSWORD` em `infra/env/api.env` — confirmar o valor la, nao assumir o default do `.env.example`.
 
 ## Pontos de atencao atuais
 

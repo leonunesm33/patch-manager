@@ -240,11 +240,6 @@ export function MachinesPage() {
     }
   }
 
-  async function handleOpenInventory(machine: Machine) {
-    if (!machine.id.startsWith("agent-")) return;
-    void handleOpenOperationalDetails(machine);
-  }
-
   async function handleOpenOperationalDetails(machine: Machine) {
     setDetailsLoading(true);
     setDetailsError(null);
@@ -872,12 +867,7 @@ export function MachinesPage() {
                     label={`Abrir acoes da maquina ${machine.name}`}
                     items={[
                       {
-                        label: "Ver inventario detalhado",
-                        disabled: !machine.id.startsWith("agent-"),
-                        onSelect: () => void handleOpenInventory(machine),
-                      },
-                      {
-                        label: "Ver detalhes operacionais",
+                        label: "Ver detalhes",
                         onSelect: () => void handleOpenOperationalDetails(machine),
                       },
                       {
