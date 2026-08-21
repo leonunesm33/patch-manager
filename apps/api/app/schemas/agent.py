@@ -117,6 +117,18 @@ class AgentCommandResponse(BaseModel):
     created_at: datetime
 
 
+class ForceReidentifyRequest(BaseModel):
+    reason: str | None = None
+
+
+class ForceReidentifyResponse(BaseModel):
+    status: str
+    command_id: str
+    old_agent_id: str
+    new_agent_id: str
+    target_semantics: str = "next_claimant"
+
+
 class AgentCommandHistoryItem(BaseModel):
     id: str
     agent_id: str

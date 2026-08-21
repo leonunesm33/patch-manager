@@ -1,6 +1,7 @@
 import logging
 import os
 import platform
+import shlex
 import socket
 import subprocess
 import threading
@@ -198,6 +199,53 @@ def _sleep_until(stop_event: threading.Event, seconds: int) -> bool:
     return stop_event.wait(seconds)
 
 
+def _schedule_force_reidentify(
+    command: dict[str, object],
+    config: AgentConfig,
+) -> tuple[str, str]:
+    payload = command.get("payload")
+    if not isinstance(payload, dict):
+        return "failed", "Payload de reidentificacao ausente ou invalido."
+
+    server_url = str(payload.get("server_url") or "").strip().rstrip("/")
+    bootstrap_token = str(payload.get("bootstrap_token") or "").strip()
+    new_agent_id = str(payload.get("new_agent_id") or "").strip()
+    parsed = urllib.parse.urlparse(server_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return "failed", "server_url de reidentificacao invalida."
+    if parsed.scheme == "http" and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
+        return "failed", "Reidentificacao remota exige HTTPS fora de localhost."
+    if not bootstrap_token:
+        return "failed", "bootstrap_token de reidentificacao ausente."
+    if not new_agent_id.startswith("linux-") or not all(
+        character.isalnum() or character == "-" for character in new_agent_id
+    ):
+        return "failed", "new_agent_id Linux invalido."
+
+    query = urllib.parse.urlencode(
+        {
+            "server_url": server_url,
+            "bootstrap_token": bootstrap_token,
+            "agent_id": new_agent_id,
+        }
+    )
+    installer_url = f"{server_url}/api/v1/agents/install/linux.sh?{query}"
+    subprocess.Popen(
+        [
+            "bash",
+            "-c",
+            f"sleep 3 && curl -fsSL {shlex.quote(installer_url)} | sudo bash",
+        ],
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return (
+        "applied",
+        f"Reidentificacao agendada como {new_agent_id}; o servico sera reiniciado.",
+    )
+
+
 def main() -> None:
     config = load_config()
     logger = configure_logging(config)
@@ -262,7 +310,16 @@ def main() -> None:
                         stderr=subprocess.DEVNULL,
                     )
                     logger.info("Upgrade script scheduled for agent %s", config.agent_id)
-                else:
+                elif command_type == "force_reidentify":
+                    result, message = _schedule_force_reidentify(command, config)
+                    submit_command_result(config, str(command["id"]), result, message)
+                    logger.warning(
+                        "Force reidentification command %s finished scheduling with result %s: %s",
+                        command["id"],
+                        result,
+                        message,
+                    )
+                elif command_type in {"reboot_now", "scheduled_reboot"}:
                     result, message = execute_manual_reboot_command(command, config)
                     submit_command_result(config, str(command["id"]), result, message)
                     logger.info(
@@ -271,6 +328,10 @@ def main() -> None:
                         result,
                         f" | {message}" if message else "",
                     )
+                else:
+                    message = f"Tipo de comando nao suportado: {command_type or '<vazio>'}."
+                    submit_command_result(config, str(command["id"]), "failed", message)
+                    logger.error(message)
                 continue
 
             job = claim_job(config)

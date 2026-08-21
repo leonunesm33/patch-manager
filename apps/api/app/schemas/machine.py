@@ -69,6 +69,23 @@ class MachineExecutionSummary(BaseModel):
     executed_at: datetime
 
 
+class AgentIdentityHistoryItem(BaseModel):
+    id: str
+    agent_id: str
+    new_agent_id: str | None = None
+    command_id: str | None = None
+    event_type: str
+    status: str
+    platform: str | None = None
+    hostname: str | None = None
+    hardware_fingerprint: str | None = None
+    previous_fingerprint: str | None = None
+    actor: str
+    reason: str | None = None
+    message: str | None = None
+    occurred_at: datetime
+
+
 class MachineCommandSummary(BaseModel):
     id: str
     command_type: str
@@ -86,3 +103,4 @@ class MachineOperationalDetails(BaseModel):
     recent_jobs: list[MachineJobSummary] = []
     recent_executions: list[MachineExecutionSummary] = []
     recent_commands: list[MachineCommandSummary] = []
+    identity_history: list[AgentIdentityHistoryItem] = []

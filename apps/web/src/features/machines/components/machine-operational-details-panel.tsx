@@ -195,6 +195,49 @@ export function MachineOperationalDetailsPanel({
                   </StatusBadge>
                 </div>
               ) : null}
+              {(details.identity_history.length > 0 ||
+                details.machine.identity_conflict_oscillation_detected_at) ? (
+                <div className="list-item" style={{ display: "block" }}>
+                  <div style={{ fontWeight: 700 }}>Historico de identidade deste agent_id</div>
+                  <div className="muted" style={{ marginTop: 4, marginBottom: 10 }}>
+                    Use hostname, fingerprint e horario para confirmar se hosts fisicos diferentes
+                    estao alternando sob a mesma identidade.
+                  </div>
+                  {details.identity_history.length === 0 ? (
+                    <div className="muted">
+                      Nenhum evento estruturado registrado ainda. Eventos anteriores a esta versao
+                      permanecem apenas no log operacional global.
+                    </div>
+                  ) : (
+                    <div className="list">
+                      {details.identity_history.map((event) => (
+                        <div className="list-item" key={event.id}>
+                          <div>
+                            <div style={{ fontWeight: 700 }}>
+                              {event.hostname ?? event.agent_id} - {event.event_type}
+                            </div>
+                            <div className="muted" style={{ marginTop: 4 }}>
+                              fingerprint {event.hardware_fingerprint ?? "nao informado"}
+                              {event.previous_fingerprint
+                                ? ` (anterior: ${event.previous_fingerprint})`
+                                : ""}
+                            </div>
+                            {event.new_agent_id ? (
+                              <div className="muted" style={{ marginTop: 4 }}>
+                                nova identidade reservada: {event.new_agent_id}
+                              </div>
+                            ) : null}
+                            {event.message ? (
+                              <div className="muted" style={{ marginTop: 4 }}>{event.message}</div>
+                            ) : null}
+                          </div>
+                          <div className="muted">{formatDateTimeSaoPaulo(event.occurred_at)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
             </div>
 
             <div className="list">

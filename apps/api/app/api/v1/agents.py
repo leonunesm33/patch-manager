@@ -1,13 +1,17 @@
 import logging
 from hashlib import sha1
 import json
+import re
 import secrets
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import urlparse
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse, PlainTextResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import (
@@ -21,6 +25,7 @@ from app.api.deps import (
 from app.core.security import hash_password
 from app.models.agent_credential import AgentCredentialModel
 from app.models.agent_command import AgentCommandModel
+from app.models.agent_identity_history import AgentIdentityHistoryModel
 from app.models.agent_enrollment import AgentEnrollmentModel
 from app.models.agent_inventory_item import AgentInventoryItemModel
 from app.models.agent_inventory_snapshot import AgentInventorySnapshotModel
@@ -28,6 +33,7 @@ from app.models.execution_log import ExecutionLogModel
 from app.models.machine import MachineModel
 from app.models.patch import PatchModel
 from app.repositories.agent_command_repository import AgentCommandRepository
+from app.repositories.agent_identity_history_repository import AgentIdentityHistoryRepository
 from app.repositories.agent_credential_repository import AgentCredentialRepository
 from app.repositories.agent_enrollment_repository import AgentEnrollmentRepository
 from app.repositories.agent_inventory_item_repository import AgentInventoryItemRepository
@@ -54,6 +60,8 @@ from app.schemas.agent import (
     AgentJobResponse,
     AgentJobResultRequest,
     ConnectedAgentResponse,
+    ForceReidentifyRequest,
+    ForceReidentifyResponse,
     PendingAgentEnrollmentResponse,
     RejectedAgentEnrollmentResponse,
     RevokedAgentResponse,
@@ -73,6 +81,65 @@ from app.services.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _record_identity_event(
+    db: Session,
+    *,
+    agent_id: str,
+    event_type: str,
+    status: str,
+    actor: str,
+    new_agent_id: str | None = None,
+    command_id: str | None = None,
+    platform: str | None = None,
+    hostname: str | None = None,
+    hardware_fingerprint: str | None = None,
+    previous_fingerprint: str | None = None,
+    reason: str | None = None,
+    message: str | None = None,
+) -> AgentIdentityHistoryModel:
+    return AgentIdentityHistoryRepository(db).add_once_for_command(
+        AgentIdentityHistoryModel(
+            id=f"identity-{secrets.token_hex(12)}",
+            agent_id=agent_id,
+            new_agent_id=new_agent_id,
+            command_id=command_id,
+            event_type=event_type,
+            status=status,
+            platform=platform,
+            hostname=hostname,
+            hardware_fingerprint=hardware_fingerprint,
+            previous_fingerprint=previous_fingerprint,
+            actor=actor,
+            reason=reason,
+            message=message,
+        )
+    )
+
+
+def _validated_install_server_url(settings_service: SettingsService) -> str:
+    server_url = settings_service.get_agent_install_server_url().rstrip("/")
+    parsed = urlparse(server_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise HTTPException(
+            status_code=409,
+            detail="Agent install server URL must be an absolute HTTP(S) URL",
+        )
+    if parsed.scheme == "http" and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
+        raise HTTPException(
+            status_code=409,
+            detail="Force reidentification requires HTTPS outside localhost",
+        )
+    return server_url
+
+
+def _validate_installer_agent_id(agent_id: str | None, platform: str) -> str | None:
+    if agent_id is None:
+        return None
+    if not re.fullmatch(rf"{platform}-[A-Za-z0-9-]{{16,80}}", agent_id):
+        raise HTTPException(status_code=422, detail=f"Invalid {platform} agent_id")
+    return agent_id
 
 
 def _classify_job_failure(error_message: str | None) -> str | None:
@@ -140,6 +207,7 @@ def _inventory_patch_severity(item: AgentInventoryItemModel) -> str:
 # identidade duplicada, ex.: dois hosts compartilhando o mesmo agent_id) em vez de um
 # reprovisionamento legitimo.
 IDENTITY_CONFLICT_OSCILLATION_WINDOW = timedelta(hours=1)
+FORCE_REIDENTIFY_CLAIM_TIMEOUT = timedelta(minutes=15)
 
 
 def _as_aware_utc(value: datetime | None) -> datetime | None:
@@ -330,7 +398,15 @@ Save-UrlFile -Url $AgentExeUrl -Target $AgentExeTarget
 """
 
 
-def _build_linux_installer_script(server_url: str, bootstrap_token: str) -> str:
+def _build_linux_installer_script(
+    server_url: str,
+    bootstrap_token: str,
+    agent_id: str | None = None,
+) -> str:
+    agent_id_assignment = (
+        agent_id
+        or "linux-$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen)"
+    )
     files_to_write = {
         "agent/config.py": _read_agent_linux_file("agent/config.py"),
         "agent/logger.py": _read_agent_linux_file("agent/logger.py"),
@@ -372,7 +448,7 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-AGENT_ID="linux-$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen)"
+AGENT_ID="{agent_id_assignment}"
 
 sudo mkdir -p "${{INSTALL_ROOT}}" /etc/patch-manager /var/log/patch-manager
 
@@ -424,7 +500,8 @@ sudo chmod 440 /etc/sudoers.d/patch-manager
 sudo rm -f /etc/sudoers.d/patch-manager-shutdown
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now "${{SERVICE_NAME}}"
+sudo systemctl enable "${{SERVICE_NAME}}"
+sudo systemctl restart "${{SERVICE_NAME}}"
 
 echo "Instalacao concluida."
 echo "Agent ID: ${{AGENT_ID}}"
@@ -540,7 +617,16 @@ echo "  sudo journalctl -u ${{SERVICE_NAME}} -f"
 """
 
 
-def _build_windows_installer_script(server_url: str, bootstrap_token: str) -> str:
+def _build_windows_installer_script(
+    server_url: str,
+    bootstrap_token: str,
+    agent_id: str | None = None,
+) -> str:
+    agent_id_assignment = (
+        f'"{agent_id}"'
+        if agent_id
+        else '"windows-$([guid]::NewGuid().ToString(\'N\'))"'
+    )
     files_to_write = {
         "agent/config.py": _read_agent_windows_file("agent/config.py"),
         "agent/logger.py": _read_agent_windows_file("agent/logger.py"),
@@ -571,11 +657,20 @@ $ErrorActionPreference = 'Stop'
 
 $ServerUrl = "{server_url.rstrip('/')}"
 $BootstrapToken = "{bootstrap_token}"
-$InstallRoot = "C:\\ProgramData\\PatchManager\\agent-windows"
+$FinalInstallRoot = "C:\\ProgramData\\PatchManager\\agent-windows"
+$OperationId = [guid]::NewGuid().ToString('N')
+$StagingRoot = "$FinalInstallRoot.reidentify-staging-$OperationId"
+$BackupRoot = "$FinalInstallRoot.reidentify-backup-$OperationId"
 $EnvTarget = "C:\\ProgramData\\PatchManager\\agent-windows.env"
+$EnvBackup = "$EnvTarget.reidentify-backup-$OperationId"
+$InstallRoot = $StagingRoot
 $ServiceName = "PatchManagerAgent"
 $LogFile = "C:\\ProgramData\\PatchManager\\agent-windows.log"
-$AgentId = "windows-$([guid]::NewGuid().ToString('N'))"
+$AgentId = {agent_id_assignment}
+$OriginalMoved = $false
+$NewInstalled = $false
+$EnvReplaced = $false
+$NewServiceInstallStarted = $false
 
 function Test-IsAdministrator {{
   $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
@@ -587,12 +682,60 @@ if (-not (Test-IsAdministrator)) {{
   throw "A instalacao do servico requer privilegio administrativo. Execute o PowerShell como Administrador."
 }}
 
+$ExistingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+$HadFinalInstall = Test-Path $FinalInstallRoot
+$HadEnv = Test-Path $EnvTarget
+trap {{
+  $Failure = $_
+  if ($null -eq $ExistingService -and $NewServiceInstallStarted) {{
+    sc.exe delete $ServiceName | Out-Null
+  }}
+  if ($NewInstalled -and (Test-Path $FinalInstallRoot)) {{
+    Remove-Item -Path $FinalInstallRoot -Recurse -Force -ErrorAction SilentlyContinue
+  }}
+  if ($OriginalMoved -and (Test-Path $BackupRoot)) {{
+    Move-Item -Path $BackupRoot -Destination $FinalInstallRoot -Force
+  }}
+  if ($EnvReplaced) {{
+    if ($HadEnv -and (Test-Path $EnvBackup)) {{
+      Copy-Item -Path $EnvBackup -Destination $EnvTarget -Force
+    }} else {{
+      Remove-Item -Path $EnvTarget -Force -ErrorAction SilentlyContinue
+    }}
+  }}
+  Remove-Item -Path $StagingRoot -Recurse -Force -ErrorAction SilentlyContinue
+  Remove-Item -Path $EnvBackup -Force -ErrorAction SilentlyContinue
+  if ($null -ne $ExistingService) {{
+    Start-Service -Name $ServiceName -ErrorAction SilentlyContinue
+  }}
+  throw $Failure
+}}
+
+Remove-Item -Path $StagingRoot -Recurse -Force -ErrorAction SilentlyContinue
 $null = New-Item -ItemType Directory -Force -Path $InstallRoot
 $null = New-Item -ItemType Directory -Force -Path "C:\\ProgramData\\PatchManager"
 
 {joined_blocks}
 
 {agent_download_block}
+
+# O runtime novo foi totalmente preparado e o executavel validado em staging.
+# Somente agora interrompemos o servico e fazemos a troca no mesmo volume.
+if ($HadEnv) {{
+  Copy-Item -Path $EnvTarget -Destination $EnvBackup -Force
+}}
+if ($null -ne $ExistingService) {{
+  Stop-Service -Name $ServiceName -Force
+  Start-Sleep -Seconds 2
+}}
+if ($HadFinalInstall) {{
+  Move-Item -Path $FinalInstallRoot -Destination $BackupRoot -Force
+  $OriginalMoved = $true
+}}
+Move-Item -Path $StagingRoot -Destination $FinalInstallRoot -Force
+$NewInstalled = $true
+$InstallRoot = $FinalInstallRoot
+$AgentExeTarget = Join-Path $InstallRoot "dist\\PatchManagerAgentWindows.exe"
 
 $EnvContent = @"
 PATCH_MANAGER_API=$ServerUrl/api/v1/agents
@@ -617,13 +760,25 @@ PATCH_MANAGER_LOG_TO_STDOUT=true
 PATCH_MANAGER_LOG_FILE=$LogFile
 "@
 [System.IO.File]::WriteAllText($EnvTarget, $EnvContent, (New-Object System.Text.UTF8Encoding($false)))
+$EnvReplaced = $true
 
 [System.Environment]::SetEnvironmentVariable("PATCH_MANAGER_ENV_FILE", $EnvTarget, "Machine")
 
-& $AgentExeTarget install | Out-Null
+if ($null -eq $ExistingService) {{
+  $NewServiceInstallStarted = $true
+  & $AgentExeTarget install | Out-Null
+  if ($LASTEXITCODE -ne 0) {{
+    throw "Falha ao registrar o servico $ServiceName (exit code $LASTEXITCODE)."
+  }}
+}}
 sc.exe config $ServiceName start= auto | Out-Null
 sc.exe failure $ServiceName reset= 86400 actions= restart/5000/restart/30000/restart/60000 | Out-Null
 Start-Service -Name $ServiceName
+
+$NewInstalled = $false
+$EnvReplaced = $false
+Remove-Item -Path $BackupRoot -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -Path $EnvBackup -Force -ErrorAction SilentlyContinue
 
 Write-Host "Instalacao concluida."
 Write-Host "Agent ID: $AgentId"
@@ -744,8 +899,13 @@ Write-Host "Servico reiniciado: $ServiceName"
 def download_linux_installer(
     server_url: str,
     bootstrap_token: str,
+    agent_id: str | None = None,
 ) -> str:
-    return _build_linux_installer_script(server_url, bootstrap_token)
+    return _build_linux_installer_script(
+        server_url,
+        bootstrap_token,
+        _validate_installer_agent_id(agent_id, "linux"),
+    )
 
 
 @router.get("/install/linux-upgrade.sh", response_class=PlainTextResponse)
@@ -757,8 +917,13 @@ def download_linux_upgrade_script(server_url: str) -> str:
 def download_windows_installer(
     server_url: str,
     bootstrap_token: str,
+    agent_id: str | None = None,
 ) -> str:
-    return _build_windows_installer_script(server_url, bootstrap_token)
+    return _build_windows_installer_script(
+        server_url,
+        bootstrap_token,
+        _validate_installer_agent_id(agent_id, "windows"),
+    )
 
 
 @router.get("/install/windows-upgrade.ps1", response_class=PlainTextResponse)
@@ -796,6 +961,26 @@ def enroll_agent(
         kernel_version=payload.kernel_version,
         agent_version=payload.agent_version,
     )
+    transition = AgentIdentityHistoryRepository(db).get_requested_transition_by_new_agent_id(
+        payload.agent_id
+    )
+    if transition is not None:
+        _record_identity_event(
+            db,
+            agent_id=transition.agent_id,
+            new_agent_id=payload.agent_id,
+            command_id=transition.command_id,
+            event_type="force_reidentify_enrollment_detected",
+            status=enrollment.status,
+            actor=payload.agent_id,
+            platform=payload.platform,
+            hostname=payload.hostname,
+            reason=transition.reason,
+            message=(
+                f"Novo enrollment {payload.agent_id} detectado para {payload.hostname}; "
+                "aguardando o fluxo normal de aprovacao."
+            ),
+        )
     if enrollment.status == "approved":
         if not enrollment.issued_key:
             # Previously active agent lost its key — generate a new one automatically
@@ -1167,6 +1352,145 @@ def request_connected_agent_upgrade(
         f"Solicitou upgrade do agente {agent_id}.",
     )
     return {"status": "queued"}
+
+
+@router.post(
+    "/connected/{agent_id}/force-reidentify",
+    response_model=ForceReidentifyResponse,
+)
+def request_connected_agent_force_reidentify(
+    agent_id: str,
+    payload: ForceReidentifyRequest,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserResponse, Depends(require_operator)],
+) -> ForceReidentifyResponse:
+    connected_agent = agent_registry_service.get_connected(agent_id)
+    if connected_agent is None:
+        raise HTTPException(status_code=404, detail="Connected agent not found")
+
+    platform = connected_agent.platform.strip().lower()
+    if platform not in {"linux", "windows"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Force reidentification is supported only for Linux and Windows agents",
+        )
+
+    settings_service = SettingsService(db)
+    if settings_service.get_agent_bootstrap_token_is_expired():
+        raise HTTPException(
+            status_code=409,
+            detail="Agent bootstrap token is expired; rotate it before forcing reidentification",
+        )
+    bootstrap_token = settings_service.get_agent_bootstrap_token().strip()
+    if not bootstrap_token:
+        raise HTTPException(status_code=409, detail="Agent bootstrap token is not configured")
+    server_url = _validated_install_server_url(settings_service)
+
+    command_repository = AgentCommandRepository(db)
+    expired_command = command_repository.expire_stale_force_reidentify(
+        agent_id,
+        datetime.now(UTC) - FORCE_REIDENTIFY_CLAIM_TIMEOUT,
+    )
+    if expired_command is not None:
+        expired_payload: dict[str, object] = {}
+        try:
+            parsed_expired_payload = json.loads(expired_command.payload_json or "{}")
+            if isinstance(parsed_expired_payload, dict):
+                expired_payload = parsed_expired_payload
+        except json.JSONDecodeError:
+            pass
+        _record_identity_event(
+            db,
+            agent_id=agent_id,
+            new_agent_id=str(expired_payload.get("new_agent_id") or "") or None,
+            command_id=expired_command.id,
+            event_type="force_reidentify_claim_expired",
+            status="failed",
+            actor="system",
+            platform=platform,
+            reason=str(expired_payload.get("reason") or "") or None,
+            message=expired_command.message,
+        )
+        settings_service.record_operational_event(
+            "agent_force_reidentify_claim_expired",
+            "system",
+            f"Expirou claim sem confirmacao do comando {expired_command.id} para {agent_id}.",
+        )
+    if command_repository.has_active_force_reidentify(agent_id):
+        raise HTTPException(
+            status_code=409,
+            detail="A force reidentification command is already pending or running for this agent_id",
+        )
+    if command_repository.list_pending_for_agent(agent_id):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Another command is pending for this agent_id; wait for it to be claimed "
+                "before forcing reidentification"
+            ),
+        )
+
+    command_id = f"cmd-{secrets.token_hex(8)}"
+    new_agent_id = f"{platform}-{uuid4().hex}"
+    reason = (payload.reason or "shared_agent_id_remediation").strip()[:255]
+    command = AgentCommandModel(
+        id=command_id,
+        agent_id=agent_id,
+        command_type="force_reidentify",
+        status="pending",
+        requested_by=current_user.username,
+        payload_json=json.dumps(
+            {
+                "server_url": server_url,
+                "bootstrap_token": bootstrap_token,
+                "new_agent_id": new_agent_id,
+                "old_agent_id": agent_id,
+                "requested_by": current_user.username,
+                "reason": reason,
+                "target_semantics": "next_claimant",
+            }
+        ),
+    )
+    try:
+        command_repository.add(command)
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="A force reidentification command is already pending or running for this agent_id",
+        ) from exc
+
+    machine = MachineRepository(db).get_by_id(f"agent-{agent_id}")
+    _record_identity_event(
+        db,
+        agent_id=agent_id,
+        new_agent_id=new_agent_id,
+        command_id=command_id,
+        event_type="force_reidentify_requested",
+        status="pending",
+        actor=current_user.username,
+        platform=platform,
+        hostname=machine.name if machine else connected_agent.hostname,
+        hardware_fingerprint=machine.hardware_fingerprint if machine else None,
+        reason=reason,
+        message=(
+            "Reidentificacao enfileirada para o host que reivindicar o comando compartilhado; "
+            "a credencial antiga permanece ativa para os demais clones."
+        ),
+    )
+    settings_service.record_operational_event(
+        "agent_force_reidentify_requested",
+        current_user.username,
+        f"Enfileirou reidentificacao de {agent_id} para o proximo host a conectar; "
+        f"nova identidade reservada: {new_agent_id}.",
+    )
+    return ForceReidentifyResponse(
+        status="queued",
+        command_id=command_id,
+        old_agent_id=agent_id,
+        new_agent_id=new_agent_id,
+        target_semantics="next_claimant",
+    )
 
 
 @router.post("/connected/upgrade-batch")
@@ -1558,6 +1882,41 @@ def submit_agent_inventory(
         if identity_audit_event is not None:
             event_type, summary = identity_audit_event
             SettingsService(db).record_operational_event(event_type, "system", summary)
+            _record_identity_event(
+                db,
+                agent_id=payload.agent_id,
+                event_type=event_type,
+                status=(
+                    "oscillation_detected"
+                    if event_type == "machine_identity_conflict_oscillation_detected"
+                    else "auto_resolved"
+                ),
+                actor="system",
+                platform=payload.platform,
+                hostname=payload.hostname,
+                hardware_fingerprint=payload.hardware_fingerprint,
+                previous_fingerprint=machine.identity_conflict_previous_fingerprint,
+                message=summary,
+            )
+
+    transition = AgentIdentityHistoryRepository(db).get_requested_transition_by_new_agent_id(
+        payload.agent_id
+    )
+    if transition is not None:
+        _record_identity_event(
+            db,
+            agent_id=transition.agent_id,
+            new_agent_id=payload.agent_id,
+            command_id=transition.command_id,
+            event_type="force_reidentify_inventory_seen",
+            status="enrolled",
+            actor=payload.agent_id,
+            platform=payload.platform,
+            hostname=payload.hostname,
+            hardware_fingerprint=payload.hardware_fingerprint,
+            reason=transition.reason,
+            message=f"Inventario recebido da nova identidade {payload.agent_id} ({payload.hostname}).",
+        )
 
     _sync_inventory_patches(db, payload.agent_id, managed_machine_id, pending_inventory_items)
 
@@ -1689,6 +2048,20 @@ def poll_next_command(
                 payload_data = parsed
         except json.JSONDecodeError:
             payload_data = {}
+    if command.command_type.strip().lower() == "force_reidentify":
+        new_agent_id = str(payload_data.get("new_agent_id") or "") or None
+        _record_identity_event(
+            db,
+            agent_id=payload.agent_id,
+            new_agent_id=new_agent_id,
+            command_id=command.id,
+            event_type="force_reidentify_claimed",
+            status="running",
+            actor=payload.agent_id,
+            platform=payload.platform,
+            reason=str(payload_data.get("reason") or "") or None,
+            message="Comando reivindicado pelo proximo host que consultou a fila compartilhada.",
+        )
     return AgentCommandResponse(
         id=command.id,
         command_type=command.command_type,
@@ -1718,8 +2091,72 @@ def submit_command_result(
         raise HTTPException(status_code=403, detail="Invalid agent for command result")
 
     normalized_result = payload.result.strip().lower()
+    expected_terminal_status = "completed" if normalized_result == "applied" else "failed"
+    if command.status in {"completed", "failed"}:
+        if command.status != expected_terminal_status:
+            raise HTTPException(status_code=409, detail="Conflicting command result replay")
+        return {"status": "acknowledged", "command_id": command_id}
+    if command.status != "running":
+        raise HTTPException(status_code=409, detail="Command is not running")
+
     command_repository.complete(command, normalized_result, payload.message)
     command_kind = command.command_type.strip().lower()
+
+    if command_kind == "force_reidentify":
+        command_payload: dict[str, object] = {}
+        try:
+            parsed_payload = json.loads(command.payload_json or "{}")
+            if isinstance(parsed_payload, dict):
+                command_payload = parsed_payload
+        except json.JSONDecodeError:
+            pass
+        new_agent_id = str(command_payload.get("new_agent_id") or "") or None
+        succeeded = normalized_result == "applied"
+        _record_identity_event(
+            db,
+            agent_id=payload.agent_id,
+            new_agent_id=new_agent_id,
+            command_id=command.id,
+            event_type=(
+                "force_reidentify_installer_scheduled"
+                if succeeded
+                else "force_reidentify_failed"
+            ),
+            status="completed" if succeeded else "failed",
+            actor=payload.agent_id,
+            reason=str(command_payload.get("reason") or "") or None,
+            message=payload.message,
+        )
+        settings_service.record_operational_event(
+            "agent_force_reidentify_scheduled" if succeeded else "agent_force_reidentify_failed",
+            payload.agent_id,
+            payload.message
+            or (
+                f"Instalador de reidentificacao agendado para {payload.agent_id}; "
+                f"nova identidade {new_agent_id}."
+                if succeeded
+                else f"Falha ao agendar reidentificacao de {payload.agent_id}."
+            ),
+        )
+        return {"status": "acknowledged", "command_id": command_id}
+
+    if command_kind == "upgrade_agent":
+        settings_service.record_operational_event(
+            "agent_upgrade_scheduled" if normalized_result == "applied" else "agent_upgrade_failed",
+            payload.agent_id,
+            payload.message or f"Resultado do upgrade do agente {payload.agent_id}: {normalized_result}.",
+        )
+        return {"status": "acknowledged", "command_id": command_id}
+
+    if command_kind not in {"reboot_now", "scheduled_reboot"}:
+        settings_service.record_operational_event(
+            "unsupported_agent_command_result",
+            payload.agent_id,
+            payload.message
+            or f"Resultado {normalized_result} recebido para comando nao suportado {command_kind}.",
+        )
+        return {"status": "acknowledged", "command_id": command_id}
+
     event_prefix = "scheduled_reboot" if command_kind == "scheduled_reboot" else "manual_reboot"
     if normalized_result == "applied":
         snapshot_repository.update_post_patch_state(

@@ -7,6 +7,7 @@ import {
   fetchMachineGroups,
   fetchMachineOperationalDetails,
   fetchMachines,
+  forceReidentifyConnectedAgent,
   resolveIdentityConflict,
   updateMachine,
 } from "@/features/machines/api";
@@ -53,6 +54,8 @@ export function MachinesPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Machine | null>(null);
+  const [pendingReidentify, setPendingReidentify] = useState<Machine | null>(null);
+  const [reidentifyConfirmation, setReidentifyConfirmation] = useState("");
   const [pendingGroupDelete, setPendingGroupDelete] = useState<MachineGroup | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [groupFeedback, setGroupFeedback] = useState<string | null>(null);
@@ -286,6 +289,31 @@ export function MachinesPage() {
     }
   }
 
+  async function handleForceReidentify(machine: Machine) {
+    const agentId = machine.id.replace(/^agent-/, "");
+    try {
+      const response = await forceReidentifyConnectedAgent(
+        agentId,
+        "identity_oscillation_shared_agent_id",
+      );
+      setUpgradeFeedback(
+        `Comando ${response.command_id} enfileirado. O host que reivindicar este comando para a identidade ${response.old_agent_id} migrara para ${response.new_agent_id}.`,
+      );
+      setTimeout(() => setUpgradeFeedback(null), 10000);
+      if (machineDetails?.machine.id === machine.id) {
+        setMachineDetails(await fetchMachineOperationalDetails(machine.id));
+      }
+    } catch (err) {
+      setUpgradeFeedback(
+        err instanceof Error ? err.message : "Falha ao forcar reidentificacao.",
+      );
+      setTimeout(() => setUpgradeFeedback(null), 10000);
+    } finally {
+      setPendingReidentify(null);
+      setReidentifyConfirmation("");
+    }
+  }
+
   async function handleBatchUpgrade() {
     const agentIds = Array.from(selectedMachineIds)
       .filter((id) => id.startsWith("agent-"))
@@ -382,6 +410,42 @@ export function MachinesPage() {
           }
         }}
       />
+      <ConfirmModal
+        open={pendingReidentify !== null}
+        title="Forcar reidentificacao do proximo host"
+        description={
+          pendingReidentify
+            ? `Esta acao NAO seleciona o host ${pendingReidentify.name}. Ela afeta o host fisico que reivindicar este comando na fila compartilhada do agent_id; a API rejeita a acao enquanto houver outro comando pendente. Repita somente depois que um novo enrollment aparecer e for aprovado; pode ser necessario repetir ate todos os clones migrarem.`
+            : ""
+        }
+        confirmLabel="Enfileirar para o proximo host"
+        confirmDisabled={
+          !pendingReidentify ||
+          reidentifyConfirmation !== pendingReidentify.id.replace(/^agent-/, "")
+        }
+        onCancel={() => {
+          setPendingReidentify(null);
+          setReidentifyConfirmation("");
+        }}
+        onConfirm={() => {
+          if (pendingReidentify) {
+            void handleForceReidentify(pendingReidentify);
+          }
+        }}
+      >
+        <label>
+          <span className="field-label">
+            Digite o agent_id para confirmar que entendeu a semantica iterativa
+          </span>
+          <input
+            className="input"
+            autoComplete="off"
+            value={reidentifyConfirmation}
+            onChange={(event) => setReidentifyConfirmation(event.target.value)}
+            placeholder={pendingReidentify?.id.replace(/^agent-/, "") ?? ""}
+          />
+        </label>
+      </ConfirmModal>
       <ConfirmModal
         open={pendingGroupDelete !== null}
         title="Excluir grupo"
@@ -891,6 +955,18 @@ export function MachinesPage() {
                         disabled: !machine.id.startsWith("agent-"),
                         onSelect: () => void handleUpgradeAgent(machine),
                       },
+                      ...(machine.identity_conflict_oscillation_detected_at
+                        ? [
+                            {
+                              label: "Forcar reidentificacao (proximo host a conectar)",
+                              onSelect: () => {
+                                setReidentifyConfirmation("");
+                                setPendingReidentify(machine);
+                              },
+                              tone: "danger" as const,
+                            },
+                          ]
+                        : []),
                       {
                         label: "Resolver conflito de identidade",
                         disabled: !machine.identity_conflict_detected_at,

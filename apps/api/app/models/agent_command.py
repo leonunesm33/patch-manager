@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, func
+from sqlalchemy import DateTime, Index, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -8,6 +8,19 @@ from app.core.database import Base
 
 class AgentCommandModel(Base):
     __tablename__ = "agent_commands"
+    __table_args__ = (
+        Index(
+            "uq_agent_commands_active_force_reidentify",
+            "agent_id",
+            unique=True,
+            postgresql_where=text(
+                "command_type = 'force_reidentify' AND status IN ('pending', 'running')"
+            ),
+            sqlite_where=text(
+                "command_type = 'force_reidentify' AND status IN ('pending', 'running')"
+            ),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(80), primary_key=True)
     agent_id: Mapped[str] = mapped_column(String(120), index=True)

@@ -1,4 +1,5 @@
 from app.models.agent_command import AgentCommandModel
+from app.models.agent_identity_history import AgentIdentityHistoryModel
 from app.models.agent_enrollment import AgentEnrollmentModel
 from app.models.agent_credential import AgentCredentialModel
 from app.models.agent_inventory_snapshot import AgentInventorySnapshotModel
@@ -15,6 +16,7 @@ __all__ = [
     "AgentEnrollmentModel",
     "AgentCredentialModel",
     "AgentCommandModel",
+    "AgentIdentityHistoryModel",
     "AgentInventorySnapshotModel",
     "ExecutionLogModel",
     "MachineModel",

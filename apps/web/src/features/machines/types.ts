@@ -56,6 +56,31 @@ export type MachineCommandSummary = {
   finished_at: string | null;
 };
 
+export type AgentIdentityHistoryItem = {
+  id: string;
+  agent_id: string;
+  new_agent_id: string | null;
+  command_id: string | null;
+  event_type: string;
+  status: string;
+  platform: string | null;
+  hostname: string | null;
+  hardware_fingerprint: string | null;
+  previous_fingerprint: string | null;
+  actor: string;
+  reason: string | null;
+  message: string | null;
+  occurred_at: string;
+};
+
+export type ForceReidentifyResponse = {
+  status: string;
+  command_id: string;
+  old_agent_id: string;
+  new_agent_id: string;
+  target_semantics: "next_claimant";
+};
+
 export type MachineOperationalDetails = {
   machine: Machine;
   agent_id: string | null;
@@ -63,6 +88,7 @@ export type MachineOperationalDetails = {
   recent_jobs: MachineJobSummary[];
   recent_executions: MachineExecutionSummary[];
   recent_commands: MachineCommandSummary[];
+  identity_history: AgentIdentityHistoryItem[];
 };
 
 export type MachineCreate = {

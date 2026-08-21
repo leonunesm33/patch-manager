@@ -5,6 +5,7 @@ import type {
   MachineGroup,
   MachineGroupCreate,
   MachineOperationalDetails,
+  ForceReidentifyResponse,
 } from "@/features/machines/types";
 
 export function fetchMachines() {
@@ -34,6 +35,13 @@ export function resolveIdentityConflict(machineId: string) {
 export function deleteMachine(machineId: string) {
   return http<void>(`/machines/${machineId}`, {
     method: "DELETE",
+  });
+}
+
+export function forceReidentifyConnectedAgent(agentId: string, reason: string) {
+  return http<ForceReidentifyResponse>(`/agents/connected/${agentId}/force-reidentify`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
   });
 }
 

@@ -9,9 +9,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_operator, require_viewer
 from app.models.machine import MachineModel
+from app.models.agent_identity_history import AgentIdentityHistoryModel
 from app.models.machine_group import MachineGroupModel
 from app.repositories.agent_credential_repository import AgentCredentialRepository
 from app.repositories.agent_command_repository import AgentCommandRepository
+from app.repositories.agent_identity_history_repository import AgentIdentityHistoryRepository
 from app.repositories.execution_log_repository import ExecutionLogRepository
 from app.repositories.patch_job_repository import PatchJobRepository
 from app.repositories.agent_inventory_snapshot_repository import AgentInventorySnapshotRepository
@@ -21,6 +23,7 @@ from app.schemas.auth import UserResponse
 from app.schemas.agent import AgentInventoryDetailItem, AgentInventoryDetailResponse
 from app.repositories.agent_inventory_item_repository import AgentInventoryItemRepository
 from app.schemas.machine import (
+    AgentIdentityHistoryItem,
     Machine,
     MachineCommandSummary,
     MachineCreate,
@@ -34,6 +37,26 @@ from app.services.settings_service import SettingsService
 
 router = APIRouter()
 AGENT_CONNECTIVITY_MAX_AGE_SECONDS = 120
+
+
+def _identity_history_item(item: AgentIdentityHistoryModel) -> AgentIdentityHistoryItem:
+    return AgentIdentityHistoryItem(
+        id=item.id,
+        agent_id=item.agent_id,
+        new_agent_id=item.new_agent_id,
+        command_id=item.command_id,
+        event_type=item.event_type,
+        status=item.status,
+        platform=item.platform,
+        hostname=item.hostname,
+        hardware_fingerprint=item.hardware_fingerprint,
+        previous_fingerprint=item.previous_fingerprint,
+        actor=item.actor,
+        reason=item.reason,
+        message=item.message,
+        occurred_at=item.occurred_at,
+    )
+
 
 MOCK_MACHINES = [
     Machine(
@@ -204,6 +227,27 @@ def get_machine(
     raise HTTPException(status_code=404, detail="Machine not found")
 
 
+@router.get(
+    "/{machine_id}/identity-history",
+    response_model=list[AgentIdentityHistoryItem],
+)
+def get_machine_identity_history(
+    machine_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[UserResponse, Depends(require_viewer)],
+) -> list[AgentIdentityHistoryItem]:
+    machine = MachineRepository(db).get_by_id(machine_id)
+    if machine is None:
+        raise HTTPException(status_code=404, detail="Machine not found")
+    if not machine.id.startswith("agent-"):
+        return []
+    agent_id = machine.id.removeprefix("agent-")
+    return [
+        _identity_history_item(item)
+        for item in AgentIdentityHistoryRepository(db).list_for_agent(agent_id, limit=50)
+    ]
+
+
 @router.get("/{machine_id}/operational-details", response_model=MachineOperationalDetails)
 def get_machine_operational_details(
     machine_id: str,
@@ -216,6 +260,7 @@ def get_machine_operational_details(
     job_repository = PatchJobRepository(db)
     execution_repository = ExecutionLogRepository(db)
     command_repository = AgentCommandRepository(db)
+    identity_history_repository = AgentIdentityHistoryRepository(db)
 
     machine = machine_repository.get_by_id(machine_id)
     if machine is None:
@@ -303,6 +348,14 @@ def get_machine_operational_details(
                 command_repository.list_recent_for_agent(agent_id, limit=10) if agent_id else []
             )
         ],
+        identity_history=[
+            _identity_history_item(item)
+            for item in (
+                identity_history_repository.list_for_agent(agent_id, limit=30)
+                if agent_id
+                else []
+            )
+        ],
     )
 
 
@@ -382,6 +435,25 @@ def resolve_machine_identity_conflict(
     machine.identity_conflict_previous_fingerprint = None
 
     machine = repository.update(machine)
+
+    agent_id = machine.id.removeprefix("agent-") if machine.id.startswith("agent-") else machine.id
+    AgentIdentityHistoryRepository(db).add(
+        AgentIdentityHistoryModel(
+            id=f"identity-{uuid4().hex[:24]}",
+            agent_id=agent_id,
+            event_type="machine_identity_conflict_resolved",
+            status="resolved",
+            platform=machine.platform,
+            hostname=machine.name,
+            hardware_fingerprint=new_fingerprint,
+            previous_fingerprint=previous_fingerprint,
+            actor=current_user.username,
+            message=(
+                f"Fingerprint anterior {previous_fingerprint!r} substituido por "
+                f"{new_fingerprint!r}."
+            ),
+        )
+    )
 
     settings_service = SettingsService(db)
     settings_service.record_operational_event(
