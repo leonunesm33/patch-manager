@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchPatchJobs, fetchReports } from "@/features/reports/api";
+import { exportReportsXlsx, fetchPatchJobs, fetchReports } from "@/features/reports/api";
 import { Pagination, usePagination } from "@/components/common/pagination";
 import { StatusBadge } from "@/components/common/status-badge";
 import { formatDateTimeSaoPaulo, formatTimeSaoPaulo } from "@/lib/datetime";
@@ -264,7 +264,7 @@ export function ReportsPage() {
 </html>`;
   }
 
-  function handleExport(format: "json" | "csv" | "xlsx" | "html" | "pdf") {
+  async function handleExport(format: "json" | "csv" | "xlsx" | "html" | "pdf") {
     setError(null);
     setExportingFormat(format);
     const exportedAt = new Date().toISOString().slice(0, 10);
@@ -282,11 +282,17 @@ export function ReportsPage() {
         downloadTextFile(`${baseName}.csv`, buildCsv(), "text/csv;charset=utf-8");
       }
       if (format === "xlsx") {
-        downloadTextFile(
-          `${baseName}.xls`,
-          buildHtmlReport(),
-          "application/vnd.ms-excel;charset=utf-8",
-        );
+        // Download real .xlsx from the backend (openpyxl)
+        const response = await exportReportsXlsx();
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${baseName}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
       }
       if (format === "html") {
         downloadTextFile(`${baseName}.html`, buildHtmlReport(), "text/html;charset=utf-8");

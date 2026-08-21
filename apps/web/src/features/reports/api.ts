@@ -1,4 +1,4 @@
-import { http } from "@/lib/http";
+import { http, httpRaw } from "@/lib/http";
 import type {
   PatchCycleRunResponse,
   PatchJobProcessResponse,
@@ -8,6 +8,10 @@ import type {
 
 export function fetchReports() {
   return http<ReportItem[]>("/reports");
+}
+
+export function exportReportsXlsx() {
+  return httpRaw("/reports/export.xlsx");
 }
 
 export function runPatchCycle() {

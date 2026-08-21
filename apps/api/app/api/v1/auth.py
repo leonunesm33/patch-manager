@@ -1,9 +1,11 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.core.limiter import limiter
+from app.core.logging import get_logger
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import (
     LoginRequest,
@@ -15,10 +17,13 @@ from app.schemas.auth import (
 from app.services.auth_service import AuthError, AuthService
 
 router = APIRouter()
+logger = get_logger(__name__)
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("5/minute")
 def login(
+    request: Request,
     payload: LoginRequest,
     db: Annotated[Session, Depends(get_db)],
 ) -> TokenResponse:
@@ -27,11 +32,17 @@ def login(
     try:
         user, token = service.authenticate(payload.username, payload.password)
     except AuthError as exc:
+        logger.warning(
+            "login_failed",
+            username=payload.username,
+            client_ip=request.client.host if request.client else "unknown",
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
         ) from exc
 
+    logger.info("login_success", username=user.username, role=user.role)
     return TokenResponse(
         access_token=token,
         must_change_password=user.must_change_password,
