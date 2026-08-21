@@ -14,6 +14,7 @@ export type Machine = {
   hardware_fingerprint: string | null;
   identity_conflict_fingerprint: string | null;
   identity_conflict_detected_at: string | null;
+  identity_conflict_oscillation_detected_at: string | null;
   post_patch_state: string | null;
   post_patch_message: string | null;
   last_apply_at: string | null;

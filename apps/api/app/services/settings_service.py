@@ -387,6 +387,7 @@ class SettingsService:
             "agent_revoked_manual",
             "agent_reintegrated_manual",
             "agent_requeue_from_revoked",
+            "machine_identity_conflict_oscillation_detected",
             "linux_real_apply_enabled",
             "linux_reboot_required",
             "linux_manual_reboot_requested",

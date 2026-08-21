@@ -369,21 +369,27 @@ def resolve_machine_identity_conflict(
 
     previous_fingerprint = machine.hardware_fingerprint
     new_fingerprint = machine.identity_conflict_fingerprint
-    if new_fingerprint is not None:
-        machine.hardware_fingerprint = new_fingerprint
+    if new_fingerprint is None:
+        raise HTTPException(status_code=409, detail="Machine has no pending identity conflict")
+
+    machine.hardware_fingerprint = new_fingerprint
     machine.identity_conflict_fingerprint = None
     machine.identity_conflict_detected_at = None
+    # Libera a auto-resolucao para voltar a funcionar normalmente depois de uma
+    # oscilacao sinalizada (ver _handle_identity_conflict em api/v1/agents.py).
+    machine.identity_conflict_oscillation_detected_at = None
+    machine.identity_conflict_auto_resolved_at = None
+    machine.identity_conflict_previous_fingerprint = None
 
     machine = repository.update(machine)
 
-    if new_fingerprint is not None:
-        settings_service = SettingsService(db)
-        settings_service.record_operational_event(
-            "machine_identity_conflict_resolved",
-            current_user.username,
-            f"Resolveu conflito de identidade da maquina {machine.name}: "
-            f"fingerprint anterior {previous_fingerprint!r} substituido por {new_fingerprint!r}.",
-        )
+    settings_service = SettingsService(db)
+    settings_service.record_operational_event(
+        "machine_identity_conflict_resolved",
+        current_user.username,
+        f"Resolveu conflito de identidade da maquina {machine.name}: "
+        f"fingerprint anterior {previous_fingerprint!r} substituido por {new_fingerprint!r}.",
+    )
 
     return Machine.model_validate(machine)
 

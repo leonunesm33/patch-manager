@@ -23,6 +23,9 @@ class Machine(BaseModel):
     hardware_fingerprint: str | None = None
     identity_conflict_fingerprint: str | None = None
     identity_conflict_detected_at: datetime | None = None
+    identity_conflict_auto_resolved_at: datetime | None = None
+    identity_conflict_previous_fingerprint: str | None = None
+    identity_conflict_oscillation_detected_at: datetime | None = None
     post_patch_state: str | None = None
     post_patch_message: str | None = None
     last_apply_at: datetime | None = None

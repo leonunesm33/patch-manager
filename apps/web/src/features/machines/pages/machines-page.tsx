@@ -815,7 +815,14 @@ export function MachinesPage() {
                 </td>
                 <td style={{ fontWeight: 700 }}>
                   {machine.name}
-                  {machine.identity_conflict_detected_at ? (
+                  {machine.identity_conflict_oscillation_detected_at ? (
+                    <span
+                      title={`Possivel identidade duplicada: fingerprint alternando entre ${machine.hardware_fingerprint ?? "?"} e ${machine.identity_conflict_fingerprint ?? "?"}. Detectado em ${formatDateTimeSaoPaulo(machine.identity_conflict_oscillation_detected_at)}. Requer revisao manual.`}
+                      style={{ marginLeft: 6 }}
+                    >
+                      <StatusBadge variant="error">possivel identidade duplicada</StatusBadge>
+                    </span>
+                  ) : machine.identity_conflict_detected_at ? (
                     <span
                       title={`Fingerprint esperado: ${machine.hardware_fingerprint ?? "?"} | visto: ${machine.identity_conflict_fingerprint ?? "?"} em ${formatDateTimeSaoPaulo(machine.identity_conflict_detected_at)}`}
                       style={{ marginLeft: 6 }}

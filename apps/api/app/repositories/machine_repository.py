@@ -24,6 +24,19 @@ class MachineRepository:
     def get_by_id(self, machine_id: str) -> MachineModel | None:
         return self.session.get(MachineModel, machine_id)
 
+    def get_by_id_for_update(self, machine_id: str) -> MachineModel | None:
+        """Obtém a máquina com lock pessimista até o próximo commit/rollback.
+
+        Serializa inventários concorrentes do mesmo agent_id no PostgreSQL para que a
+        detecção A→B→A não perca a oscilação. No SQLite dos testes, FOR UPDATE é ignorado.
+        """
+        statement = (
+            select(MachineModel)
+            .where(MachineModel.id == machine_id)
+            .with_for_update()
+        )
+        return self.session.scalar(statement)
+
     def get_by_name(self, machine_name: str) -> MachineModel | None:
         statement = select(MachineModel).where(MachineModel.name == machine_name)
         return self.session.scalar(statement)

@@ -1,3 +1,8 @@
+from datetime import UTC, datetime, timedelta
+
+from app.api.deps import require_operator
+from app.main import app
+from app.services.settings_service import SettingsService
 from app.tests.conftest import TEST_AGENT_ID
 
 
@@ -53,16 +58,131 @@ def test_hostname_rename_updates_name_without_conflict(client, db_session):
     assert machine.identity_conflict_detected_at is None
 
 
-def test_different_fingerprint_flags_conflict_but_still_updates_name(client, db_session):
+def test_different_fingerprint_auto_resolves_on_first_change(client, db_session):
     _post_inventory(client, hostname="srv-web-03", hardware_fingerprint="uuid-aaa")
 
     _post_inventory(client, hostname="srv-web-03-clone", hardware_fingerprint="uuid-bbb")
 
     machine = _get_machine(db_session)
     assert machine.name == "srv-web-03-clone"
-    assert machine.hardware_fingerprint == "uuid-aaa"
-    assert machine.identity_conflict_fingerprint == "uuid-bbb"
+    assert machine.hardware_fingerprint == "uuid-bbb"
+    assert machine.identity_conflict_fingerprint is None
+    assert machine.identity_conflict_detected_at is None
+    assert machine.identity_conflict_oscillation_detected_at is None
+    assert machine.identity_conflict_previous_fingerprint == "uuid-aaa"
+    assert machine.identity_conflict_auto_resolved_at is not None
+
+    events = SettingsService(db_session).list_operational_events(limit=10)
+    assert any(
+        event["event_type"] == "machine_identity_conflict_auto_resolved"
+        and "uuid-aaa" in event["summary"]
+        and "uuid-bbb" in event["summary"]
+        for event in events
+    )
+
+
+def test_fingerprint_flip_flop_within_window_is_flagged_as_oscillation(client, db_session):
+    _post_inventory(client, hostname="srv-tpl-01", hardware_fingerprint="uuid-aaa")
+    # Primeira mudanca: auto-resolve (comportamento normal de reprovisionamento).
+    _post_inventory(client, hostname="srv-tpl-01", hardware_fingerprint="uuid-bbb")
+
+    # Volta ao fingerprint anterior pouco depois: sinal de duas maquinas compartilhando
+    # o mesmo agent_id, nao um reprovisionamento legitimo -> nao deve auto-resolver.
+    _post_inventory(client, hostname="srv-tpl-01", hardware_fingerprint="uuid-aaa")
+
+    machine = _get_machine(db_session)
+    assert machine.hardware_fingerprint == "uuid-bbb"
+    assert machine.identity_conflict_fingerprint == "uuid-aaa"
     assert machine.identity_conflict_detected_at is not None
+    assert machine.identity_conflict_oscillation_detected_at is not None
+
+    events = SettingsService(db_session).list_operational_events(limit=10)
+    oscillation_event = next(
+        event
+        for event in events
+        if event["event_type"] == "machine_identity_conflict_oscillation_detected"
+    )
+    assert oscillation_event["severity"] == "warn"
+    assert "uuid-aaa" in oscillation_event["summary"]
+    assert "uuid-bbb" in oscillation_event["summary"]
+
+
+def test_return_after_oscillation_window_is_auto_resolved(client, db_session):
+    _post_inventory(client, hostname="srv-tpl-window", hardware_fingerprint="uuid-aaa")
+    _post_inventory(client, hostname="srv-tpl-window", hardware_fingerprint="uuid-bbb")
+
+    machine = _get_machine(db_session)
+    machine.identity_conflict_auto_resolved_at = datetime.now(UTC) - timedelta(hours=2)
+    db_session.commit()
+
+    _post_inventory(client, hostname="srv-tpl-window", hardware_fingerprint="uuid-aaa")
+
+    machine = _get_machine(db_session)
+    assert machine.hardware_fingerprint == "uuid-aaa"
+    assert machine.identity_conflict_fingerprint is None
+    assert machine.identity_conflict_oscillation_detected_at is None
+
+
+def test_future_auto_resolved_timestamp_does_not_trigger_oscillation(client, db_session):
+    _post_inventory(client, hostname="srv-tpl-future", hardware_fingerprint="uuid-aaa")
+    _post_inventory(client, hostname="srv-tpl-future", hardware_fingerprint="uuid-bbb")
+
+    machine = _get_machine(db_session)
+    machine.identity_conflict_auto_resolved_at = datetime.now(UTC) + timedelta(hours=2)
+    db_session.commit()
+
+    _post_inventory(client, hostname="srv-tpl-future", hardware_fingerprint="uuid-aaa")
+
+    machine = _get_machine(db_session)
+    assert machine.hardware_fingerprint == "uuid-aaa"
+    assert machine.identity_conflict_fingerprint is None
+    assert machine.identity_conflict_oscillation_detected_at is None
+
+
+def test_conflict_stays_flagged_for_manual_review_once_oscillation_detected(client, db_session):
+    _post_inventory(client, hostname="srv-tpl-02", hardware_fingerprint="uuid-aaa")
+    _post_inventory(client, hostname="srv-tpl-02", hardware_fingerprint="uuid-bbb")
+    _post_inventory(client, hostname="srv-tpl-02", hardware_fingerprint="uuid-aaa")
+
+    machine = _get_machine(db_session)
+    assert machine.identity_conflict_oscillation_detected_at is not None
+
+    # Mais um relato conflitante enquanto a oscilacao esta sinalizada: continua sem
+    # auto-resolver, apenas atualiza o fingerprint visto por ultimo.
+    _post_inventory(client, hostname="srv-tpl-02", hardware_fingerprint="uuid-ccc")
+
+    machine = _get_machine(db_session)
+    assert machine.hardware_fingerprint == "uuid-bbb"
+    assert machine.identity_conflict_fingerprint == "uuid-ccc"
+    assert machine.identity_conflict_oscillation_detected_at is not None
+
+
+def test_manual_resolution_reenables_auto_resolution_on_next_sync(client, db_session):
+    _post_inventory(client, hostname="srv-tpl-manual", hardware_fingerprint="uuid-aaa")
+    _post_inventory(client, hostname="srv-tpl-manual", hardware_fingerprint="uuid-bbb")
+    _post_inventory(client, hostname="srv-tpl-manual", hardware_fingerprint="uuid-aaa")
+
+    app.dependency_overrides[require_operator] = lambda: type(
+        "Operator", (), {"username": "test-operator"}
+    )()
+    try:
+        response = client.post(
+            f"/api/v1/machines/agent-{TEST_AGENT_ID}/resolve-identity-conflict"
+        )
+        assert response.status_code == 200
+    finally:
+        del app.dependency_overrides[require_operator]
+
+    # A resolução manual promoveu uuid-aaa e limpou a memória de oscilação. Um novo
+    # relato de uuid-bbb volta a ser tratado como reprovisionamento legítimo.
+    _post_inventory(client, hostname="srv-tpl-manual", hardware_fingerprint="uuid-bbb")
+
+    machine = _get_machine(db_session)
+    assert machine.hardware_fingerprint == "uuid-bbb"
+    assert machine.identity_conflict_fingerprint is None
+    assert machine.identity_conflict_oscillation_detected_at is None
+    assert machine.identity_conflict_previous_fingerprint == "uuid-aaa"
+    assert machine.identity_conflict_auto_resolved_at is not None
 
 
 def test_backfills_fingerprint_when_machine_had_none(client, db_session):

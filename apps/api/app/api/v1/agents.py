@@ -2,7 +2,7 @@ import logging
 from hashlib import sha1
 import json
 import secrets
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
 
@@ -134,6 +134,93 @@ def _inventory_patch_severity(item: AgentInventoryItemModel) -> str:
     if item.security_only:
         return "important"
     return "low"
+
+
+# Janela em que uma volta ao fingerprint anterior e tratada como oscilacao (possivel
+# identidade duplicada, ex.: dois hosts compartilhando o mesmo agent_id) em vez de um
+# reprovisionamento legitimo.
+IDENTITY_CONFLICT_OSCILLATION_WINDOW = timedelta(hours=1)
+
+
+def _as_aware_utc(value: datetime | None) -> datetime | None:
+    # SQLite (usado nos testes) nao preserva tzinfo mesmo em colunas DateTime(timezone=True):
+    # o valor volta naive do banco. Trata naive como UTC e normaliza timestamps aware para UTC.
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _handle_identity_conflict(
+    machine: MachineModel,
+    new_fingerprint: str,
+    managed_machine_id: str,
+) -> tuple[str, str] | None:
+    """Atualiza o estado de identidade e retorna o evento de auditoria a persistir.
+
+    O helper nao grava no banco. Assim, a maquina e confirmada primeiro pelo endpoint e a
+    auditoria nao provoca um commit implicito no meio da decisao de identidade.
+    """
+    now = datetime.now(UTC)
+
+    if machine.identity_conflict_oscillation_detected_at is not None:
+        # Ja sinalizado como possivel identidade duplicada; permanece em revisao manual
+        # (ver resolve_machine_identity_conflict) em vez de auto-resolver de novo.
+        machine.identity_conflict_fingerprint = new_fingerprint
+        machine.identity_conflict_detected_at = now
+        logger.warning(
+            "Identity conflict (awaiting manual review) for machine %s: expected %s, saw %s",
+            managed_machine_id,
+            machine.hardware_fingerprint,
+            new_fingerprint,
+        )
+        return None
+
+    last_auto_resolved_at = _as_aware_utc(machine.identity_conflict_auto_resolved_at)
+    elapsed_since_auto_resolve = (
+        now - last_auto_resolved_at if last_auto_resolved_at is not None else None
+    )
+    is_oscillation = (
+        elapsed_since_auto_resolve is not None
+        and timedelta(0) <= elapsed_since_auto_resolve <= IDENTITY_CONFLICT_OSCILLATION_WINDOW
+        and machine.identity_conflict_previous_fingerprint == new_fingerprint
+    )
+
+    if is_oscillation:
+        machine.identity_conflict_fingerprint = new_fingerprint
+        machine.identity_conflict_detected_at = now
+        machine.identity_conflict_oscillation_detected_at = now
+        logger.warning(
+            "Identity oscillation detected for machine %s: fingerprint alternating between %s and %s",
+            managed_machine_id,
+            machine.hardware_fingerprint,
+            new_fingerprint,
+        )
+        return (
+            "machine_identity_conflict_oscillation_detected",
+            f"Possivel identidade duplicada na maquina {managed_machine_id}: fingerprint "
+            f"alternando entre {machine.hardware_fingerprint!r} e {new_fingerprint!r}. "
+            "Requer revisao manual.",
+        )
+
+    previous_fingerprint = machine.hardware_fingerprint
+    machine.identity_conflict_previous_fingerprint = previous_fingerprint
+    machine.hardware_fingerprint = new_fingerprint
+    machine.identity_conflict_auto_resolved_at = now
+    machine.identity_conflict_fingerprint = None
+    machine.identity_conflict_detected_at = None
+    logger.warning(
+        "Identity conflict auto-resolved for machine %s: fingerprint changed from %s to %s",
+        managed_machine_id,
+        previous_fingerprint,
+        new_fingerprint,
+    )
+    return (
+        "machine_identity_conflict_auto_resolved",
+        f"Conflito de identidade resolvido automaticamente na maquina {managed_machine_id}: "
+        f"fingerprint anterior {previous_fingerprint!r} substituido por {new_fingerprint!r}.",
+    )
 
 
 def _sync_inventory_patches(
@@ -1422,7 +1509,9 @@ def submit_agent_inventory(
 
     machine_repository = MachineRepository(db)
     managed_machine_id = f"agent-{payload.agent_id}"
-    machine = machine_repository.get_by_id(managed_machine_id)
+    # Lock pessimista no PostgreSQL para serializar inventários concorrentes do mesmo agent_id.
+    machine = machine_repository.get_by_id_for_update(managed_machine_id)
+    identity_audit_event: tuple[str, str] | None = None
     risk = "critical" if payload.upgradable_packages >= 10 else "important"
     if payload.upgradable_packages == 0:
         risk = "optional"
@@ -1460,15 +1549,15 @@ def submit_agent_inventory(
             if machine.hardware_fingerprint is None:
                 machine.hardware_fingerprint = payload.hardware_fingerprint
             elif machine.hardware_fingerprint != payload.hardware_fingerprint:
-                machine.identity_conflict_fingerprint = payload.hardware_fingerprint
-                machine.identity_conflict_detected_at = datetime.now(UTC)
-                logger.warning(
-                    "Identity conflict detected for machine %s: expected fingerprint %s, saw %s",
-                    managed_machine_id,
-                    machine.hardware_fingerprint,
+                identity_audit_event = _handle_identity_conflict(
+                    machine,
                     payload.hardware_fingerprint,
+                    managed_machine_id,
                 )
         machine_repository.update(machine)
+        if identity_audit_event is not None:
+            event_type, summary = identity_audit_event
+            SettingsService(db).record_operational_event(event_type, "system", summary)
 
     _sync_inventory_patches(db, payload.agent_id, managed_machine_id, pending_inventory_items)
 

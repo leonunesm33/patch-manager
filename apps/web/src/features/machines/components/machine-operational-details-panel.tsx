@@ -166,7 +166,18 @@ export function MachineOperationalDetailsPanel({
               {details.machine.identity_conflict_detected_at ? (
                 <div className="list-item">
                   <div>
-                    <div style={{ fontWeight: 700 }}>Conflito de identidade detectado</div>
+                    <div style={{ fontWeight: 700 }}>
+                      {details.machine.identity_conflict_oscillation_detected_at
+                        ? "Possivel identidade duplicada"
+                        : "Conflito de identidade detectado"}
+                    </div>
+                    {details.machine.identity_conflict_oscillation_detected_at ? (
+                      <div className="muted" style={{ marginTop: 4 }}>
+                        O fingerprint deste agent_id ficou alternando entre dois valores — pode ser
+                        que dois hosts fisicos estejam compartilhando a mesma credencial de agente
+                        (ex.: clone de template nao re-enrollado). Revise antes de resolver.
+                      </div>
+                    ) : null}
                     <div className="muted" style={{ marginTop: 4 }}>
                       Fingerprint esperado: {details.machine.hardware_fingerprint ?? "?"}
                     </div>
@@ -177,7 +188,11 @@ export function MachineOperationalDetailsPanel({
                       Detectado em: {formatDateTimeSaoPaulo(details.machine.identity_conflict_detected_at)}
                     </div>
                   </div>
-                  <StatusBadge variant="error">conflito de identidade</StatusBadge>
+                  <StatusBadge variant="error">
+                    {details.machine.identity_conflict_oscillation_detected_at
+                      ? "possivel identidade duplicada"
+                      : "conflito de identidade"}
+                  </StatusBadge>
                 </div>
               ) : null}
             </div>
