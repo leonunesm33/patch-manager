@@ -416,6 +416,8 @@ export function SchedulesPage() {
                       recurrence === "monthly_weekday" ? (current.recurrence_weekday ?? 3) : null,
                     recurrence_ordinal:
                       recurrence === "monthly_weekday" ? (current.recurrence_ordinal ?? 3) : null,
+                    install_date: recurrence === "monthly_weekday" ? null : (current.install_date ?? today),
+                    reboot_date: recurrence === "monthly_weekday" ? null : (current.reboot_date ?? today),
                   }));
                 }}
               >
@@ -469,17 +471,19 @@ export function SchedulesPage() {
               </div>
             ) : null}
             <div className="form-row">
-              <label>
-                <span className="field-label">Data de instalacao</span>
-                <input
-                  className="input"
-                  type="date"
-                  value={form.install_date ?? ""}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, install_date: event.target.value || null }))
-                  }
-                />
-              </label>
+              {form.recurrence !== "monthly_weekday" ? (
+                <label>
+                  <span className="field-label">Data de instalacao</span>
+                  <input
+                    className="input"
+                    type="date"
+                    value={form.install_date ?? ""}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, install_date: event.target.value || null }))
+                    }
+                  />
+                </label>
+              ) : null}
               <label>
                 <span className="field-label">Hora de instalacao</span>
                 <input
@@ -508,18 +512,20 @@ export function SchedulesPage() {
               </select>
             </label>
             <div className="form-row">
-              <label>
-                <span className="field-label">Data de reboot</span>
-                <input
-                  className="input"
-                  disabled={form.reboot_policy === "never"}
-                  type="date"
-                  value={form.reboot_date ?? ""}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, reboot_date: event.target.value || null }))
-                  }
-                />
-              </label>
+              {form.recurrence !== "monthly_weekday" ? (
+                <label>
+                  <span className="field-label">Data de reboot</span>
+                  <input
+                    className="input"
+                    disabled={form.reboot_policy === "never"}
+                    type="date"
+                    value={form.reboot_date ?? ""}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, reboot_date: event.target.value || null }))
+                    }
+                  />
+                </label>
+              ) : null}
               <label>
                 <span className="field-label">Hora de reboot</span>
                 <input
