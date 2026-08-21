@@ -17,6 +17,7 @@ class Machine(BaseModel):
     group: str
     status: str
     pending_patches: int
+    pending_security_critical_patches: int = 0
     last_check_in: datetime
     risk: str
     hardware_fingerprint: str | None = None
@@ -36,6 +37,7 @@ class MachineCreate(BaseModel):
     group: str
     status: str = "online"
     pending_patches: int = 0
+    pending_security_critical_patches: int = 0
     risk: str = "important"
 
 

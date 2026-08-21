@@ -1477,13 +1477,19 @@ def submit_agent_inventory(
     # Isso alinha com o total de upgradable_packages do OS e com a visao "Todos"
     # na tela de Aprovacoes. "rejected" e excluido (decisao tomada).
     target = f"machine:{managed_machine_id}"
-    pending_pm_count = sum(
-        1 for p in PatchRepository(db).list_by_target(target)
+    all_pending_patches = [
+        p for p in PatchRepository(db).list_by_target(target)
         if p.approval_status in {"pending", "approved"}
+    ]
+    pending_pm_count = len(all_pending_patches)
+    pending_security_critical_count = sum(
+        1 for p in all_pending_patches
+        if p.category == "security" or p.severity == "critical"
     )
     machine_refreshed = machine_repository.get_by_id(managed_machine_id)
     if machine_refreshed is not None:
         machine_refreshed.pending_patches = pending_pm_count
+        machine_refreshed.pending_security_critical_patches = pending_security_critical_count
         machine_repository.update(machine_refreshed)
 
     return {"status": "ok"}

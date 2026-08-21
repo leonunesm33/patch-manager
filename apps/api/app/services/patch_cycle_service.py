@@ -293,6 +293,10 @@ class PatchCycleService:
             job.error_message = "Machine offline during execution."
         else:
             machine.pending_patches = max(machine.pending_patches - 1, 0)
+            if patch.category == "security" or patch.severity == "critical":
+                machine.pending_security_critical_patches = max(
+                    machine.pending_security_critical_patches - 1, 0
+                )
             machine.last_check_in = datetime.now(UTC)
             self.machine_repository.update(machine)
             job.status = "completed"

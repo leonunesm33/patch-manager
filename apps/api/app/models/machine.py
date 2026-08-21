@@ -18,6 +18,7 @@ class MachineModel(Base):
     group: Mapped[str] = mapped_column("group_name", String(120), index=True)
     status: Mapped[str] = mapped_column(String(30))
     pending_patches: Mapped[int] = mapped_column(Integer, default=0)
+    pending_security_critical_patches: Mapped[int] = mapped_column(Integer, default=0)
     last_check_in: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     risk: Mapped[str] = mapped_column(String(30))
     hardware_fingerprint: Mapped[str | None] = mapped_column(String(255), nullable=True)

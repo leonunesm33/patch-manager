@@ -831,12 +831,13 @@ export function MachinesPage() {
                       onClick={() =>
                         navigate(`/patches?machine_id=${encodeURIComponent(machine.id)}&approval_status=pending&machine_name=${encodeURIComponent(machine.name)}`)
                       }
+                      title="total / segurança e críticos"
                       type="button"
                     >
-                      {machine.pending_patches} pendentes
+                      {machine.pending_patches}/{machine.pending_security_critical_patches} pendentes
                     </button>
                   ) : (
-                    <span className="muted">0</span>
+                    <span className="muted">0/0</span>
                   )}
                 </td>
                 <td>

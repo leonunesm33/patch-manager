@@ -8,6 +8,7 @@ export type Machine = {
   group: string;
   status: "online" | "warning" | "offline";
   pending_patches: number;
+  pending_security_critical_patches: number;
   last_check_in: string;
   risk: "critical" | "important" | "optional";
   hardware_fingerprint: string | null;
